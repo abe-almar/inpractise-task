@@ -13,7 +13,7 @@ alternatives and the check that backs it. Dates are the day the entry was writte
   issuer's CIK (Chemical Banking's 1994 and 1995 10-K/As, four Disney ones found by the fresh agent): it is still an
   amendment of that year's report, and the analyst answer classifies it from its explanatory note.
 - Quarterly: `10-Q`, `10-QT`, `10-QSB`, and their `/A` amendments.
-- Late-filing notices `NT 10-K`, `NT 10-Q`, `NT 20-F` are ingested as a third family (`late_notice`), because they come
+- Late-filing notices `NT 10-K`, `NT 10-K405`, `NT 10-Q`, `NT 20-F` are ingested as a third family (`late_notice`), because they come
   from the same feed at no cost and the analyst's question needs them.
 - Excluded: `6-K`. SAP, SHEL, BABA, NVO and TM never file a 10-Q; their interim results travel as 6-K, "furnished" not
   "filed", mixed with hundreds of other 6-Ks (SHEL has 1,415) and not identifiable from metadata. The table therefore
@@ -24,7 +24,7 @@ alternatives and the check that backs it. Dates are the day the entry was writte
 
 ## D2. A company is not a CIK (proposed 2026-11-07; revised the same day)
 
-- `companies` (ticker, name) and `company_ciks` (cik, valid_from, valid_to, how we know) are separate. A company may
+- `companies` (ticker) and `company_ciks` (cik, valid_from, valid_to, how we know) are separate; names live on `filers`. A company may
   have several CIKs over time.
 - Why: `XOM` maps today to ExxonMobil Holdings Corp (CIK 2115436), a holding company created on 2026-07-01 (form 8-K12B)
   with two 10-Qs to its name; thirty years of 10-Ks sit under Exxon Mobil Corp (CIK 34088), which carries no ticker any
@@ -115,8 +115,11 @@ alternatives and the check that backs it. Dates are the day the entry was writte
 - The recent page holds about 1,000 filings; for JPM that is less than a year of history, which is still far more
   than one day of filings, so the daily run cannot miss a report unless it has not run for months. The `history_gap`
   check measures exactly that: if the previous successful run is older than the oldest filing on today's recent page,
-  the run fails and asks for `backfill --full`. History pages are read once per filer (`backfill_completed_at`), so
-  adding a company does not re-read everyone else's history (review pass 1 and the fresh agent both found that it did).
+  the run fails and asks for `backfill`. History pages are read once per filer (`backfill_completed_at`), again when
+  a gap is on record, and for everyone with `--full`, so adding a company does not re-read everyone else's history
+  (review pass 1 and the fresh agent both found that it did). Revised after review pass 3: coverage is a per-filer
+  watermark (`coverage_through`), advanced only by a page that overlaps it or by a history read, because a run-level
+  "last clean run" baseline either faded the alarm (pass 2) or made recovery impossible (pass 3).
 - A page is validated before it counts as fetched: it must be for the requested CIK, with a non-empty, consistent
   recent block; otherwise the filer counts as failed and `run_complete` fails (review pass 1: an empty page passed).
 
@@ -150,8 +153,9 @@ alternatives and the check that backs it. Dates are the day the entry was writte
 
 ## D9. The morning check (proposed 2026-11-07; decided, see docs/morning-check.md for the final list)
 
-Every run ends by executing checks against the database and recording them in `checks`; `sec-filings check` reruns
-them without fetching and prints a one-screen report. "Wrong" is defined as any of:
+Every run ends by executing checks against the database and recording them in `checks`; `sec-filings check`
+re-reads the latest run's stored results without fetching or re-evaluating, adds "did a clean run start today", and
+prints a one-screen report. "Wrong" is defined as any of:
 
 1. No successful run row for today, or the run made fewer requests than companies (partial fetch).
 2. A ticker now resolves to a different CIK than yesterday (the Exxon case) — hard fail.
@@ -159,7 +163,8 @@ them without fetching and prints a one-screen report. "Wrong" is defined as any 
 4. A filing with no fiscal label, or two originals for the same (company, family, year, period) outside a documented
    reorganisation overlap.
 5. A company whose last annual or quarterly report is older than its cadence allows (10-K due 60 to 90 days after year
-   end, 10-Q 40 to 45 days after quarter end, 20-F 120 days) — reported as overdue, which is also the analyst's "late".
+   end, 10-Q 40 to 45 days after quarter end, 20-F four calendar months) — reported as overdue, which is also the
+   analyst's "late".
 6. A new filing whose rule-based label disagrees with the SEC's XBRL label.
 7. New amendments or late-filing notices since the last run (informational, listed by name).
 8. EDGAR answered with 429 or 5xx at any point, or the run took longer than a stated budget.
@@ -179,7 +184,7 @@ is not among the checks.
 
 - "Late": computed as filing date minus period end compared with the statutory deadline for the filer's category
   (large accelerated 60 days for annual and 40 for quarterly, accelerated 75/40, non-accelerated 90/45, foreign
-  private issuers 120 days for the 20-F), rolled to the next business day, plus the NT notices themselves, which are
+  private issuers four calendar months for the 20-F), rolled to the next business day, plus the NT notices themselves, which are
   the filer's own admission. Revised: the foreign-private-issuer class is decided by the form of the latest annual
   report (20-F/40-F), not by EDGAR's `category`, which calls Shell and Toyota "Large accelerated filer" although their
   20-F deadline is four months regardless. Confidence is limited because the submissions API gives only the current filer category,

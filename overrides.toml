@@ -88,3 +88,21 @@ note = "Chemical Banking Corp (JPMorgan's predecessor under CIK 19617) 10-K/A fi
 check = "labels_inferred_for_amendments"
 key = "0000019617-95-000080"
 note = "Chemical Banking Corp 10-K/A filed 1995-06-26: 'amends ... exhibits ... of its Annual Report on Form 10-K for the fiscal year ended December 31, 1994'. The inferred label 1994 FY is right. Read 2026-11-07 at https://www.sec.gov/Archives/edgar/data/19617/0000019617-95-000080.txt"
+
+[[filing_notes]]
+accession = "0001104659-20-104415"
+note = "Filed by Churchill Capital Corp IV, the SPAC shell, before its July 2021 merger with Lucid (fiscal 2020 Q2)."
+[[filing_notes]]
+accession = "0001104659-20-123051"
+note = "Filed by Churchill Capital Corp IV, the SPAC shell, before its July 2021 merger with Lucid (fiscal 2020 Q3)."
+[[filing_notes]]
+accession = "0001104659-21-068094"
+note = "Late-filing notice by Churchill Capital Corp IV, the SPAC shell, for its fiscal 2021 Q1 10-Q (warrant restatement), before the Lucid merger."
+[[filing_notes]]
+accession = "0001104659-21-074484"
+note = "Filed by Churchill Capital Corp IV, the SPAC shell, before its July 2021 merger with Lucid (fiscal 2021 Q1, filed late after an NT 10-Q)."
+
+[[accepted_findings]]
+check = "labels_match_sec"
+key = "0000037996-16-000098"
+note = "Ford 10-K/A filed 2016-03-30 (adds Changan Ford's financial statements under Rule 3-09): tagged as XBRL by EDGAR but the companyfacts API carries no facts for this accession, so no SEC label can exist. Our label 2015 FY matches the period of report 2015-12-31. Checked 2026-11-07."

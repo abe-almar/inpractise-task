@@ -32,6 +32,14 @@ registrant's page overwrote the first's metadata; acceptance ran on a truncated 
 not four months; two documented features (dated year ends, a recovery for tickers missing from EDGAR's file) did not
 exist. Left as stated limitations: federal holidays and the thirteen-week approximation of 52/53-week quarter ends.
 
+**The delta review then caught two things my fixes had introduced.** A run that completed but failed its checks
+still counted as the "last good run", so the new outage alarm could clear itself without a backfill; and the new
+daily refresh of the SEC's labels only ran for filers with brand-new filings, so a failed or lagging refresh was
+never retried. Both are persistent state now; the third pass then showed my first fix made recovery impossible (the
+re-read cleared the gap and the old baseline re-set it), so coverage became a per-filer watermark, and the whole
+outage path was exercised on the live database (`docs/evidence/outage-recovery-2026-11-07.log`). Unlabelled XBRL
+filings are retried every run and become findings after three weeks.
+
 **The fresh-agent test found what the kit could not express.** With no persona, it added five companies, found the
 Google and Disney predecessor CIKs on its own (Disney has two), and stopped, correctly, on a Disney 10-Q whose EDGAR
 period is a year off: the kit had no per-filing correction, and accepting the duplicate would have hidden the real

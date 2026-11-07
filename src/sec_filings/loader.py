@@ -220,13 +220,16 @@ class IngestResult:
     history_fetched: bool
 
 
+PAGE_COLUMNS = (
+    "accessionNumber", "filingDate", "reportDate", "acceptanceDateTime", "act", "fileNumber", "filmNumber",
+    "primaryDocument", "primaryDocDescription", "isXBRL", "isInlineXBRL", "size", "form",
+)
+
+
 def parse_page(cik: int, page: dict) -> list[dict]:
     """Rows for the forms the job tracks, from one submissions page (the 'recent' block or an older page)."""
     forms = page.get("form") or []
-    columns = {key: page.get(key) or [] for key in (
-        "accessionNumber", "filingDate", "reportDate", "acceptanceDateTime", "act", "fileNumber", "filmNumber",
-        "primaryDocument", "primaryDocDescription", "isXBRL", "isInlineXBRL", "size",
-    )}
+    columns = {key: page.get(key) or [] for key in PAGE_COLUMNS if key != "form"}
     rows: list[dict] = []
     for i, form in enumerate(forms):
         fam = fiscal.family(form)
@@ -266,22 +269,29 @@ def validate_submissions(cik: int, data: dict) -> dict:
     accessions = recent.get("accessionNumber") or []
     if not accessions:
         raise EdgarError(f"submissions page for CIK {cik} has an empty recent block")
+    for key in PAGE_COLUMNS:
+        column = recent.get(key)
+        if column is not None and len(column) != len(accessions):
+            raise EdgarError(f"submissions page for CIK {cik}: column {key} has {len(column)} entries, accessionNumber has {len(accessions)}")
     for key in ("form", "filingDate"):
-        if len(recent.get(key) or []) != len(accessions):
-            raise EdgarError(f"submissions page for CIK {cik}: column {key} has a different length than accessionNumber")
+        if not recent.get(key):
+            raise EdgarError(f"submissions page for CIK {cik}: column {key} is missing")
     return recent
 
 
 def ingest_filer(
     conn: psycopg.Connection, client: EdgarClient, run_id: int, cik: int, backfill: bool, overrides_fye: str | None,
-    today: date, full: bool = False,
+    today: date, full: bool = False, seen_this_run: set[str] | None = None,
 ) -> IngestResult:
+    """Fetch one filer's pages and load them. `seen_this_run` collects the accession numbers every page of this run
+    listed, so a filing co-filed by two registrants is never flagged missing for one while the other lists it."""
     data, raw = client.submissions(cik)
     recent = validate_submissions(cik, data)
     with conn.cursor() as cur:
-        cur.execute("SELECT backfill_completed_at FROM filers WHERE cik = %s", (cik,))
+        cur.execute("SELECT backfill_completed_at, coverage_gap_since FROM filers WHERE cik = %s", (cik,))
         row = cur.fetchone()
-        history_done = bool(row and row["backfill_completed_at"])
+        # history is read when it was never read, when a coverage gap is on record, or on --full
+        history_done = bool(row and row["backfill_completed_at"] and row["coverage_gap_since"] is None)
         cur.execute(
             """
             INSERT INTO filers (cik, name, entity_type, category, sic, sic_description, fiscal_year_end,
@@ -321,11 +331,12 @@ def ingest_filer(
             pages += 1
         history_fetched = True
     inserted, updated = upsert_filings(conn, rows, run_id)
-    newly_missing = _mark_missing(conn, cik, window_start, {r["accession_number"] for r in rows}, today)
-    with conn.cursor() as cur:
-        cur.execute("UPDATE filers SET recent_window_start = %s WHERE cik = %s", (recent_window_start, cik))
-        if history_fetched:
-            cur.execute("UPDATE filers SET backfill_completed_at = now() WHERE cik = %s", (cik,))
+    listed = {r["accession_number"] for r in rows}
+    if seen_this_run is not None:
+        seen_this_run |= listed
+        listed = set(seen_this_run)
+    newly_missing = _mark_missing(conn, cik, window_start, listed, today)
+    _advance_coverage(conn, cik, recent_window_start, history_fetched, today)
     conn.commit()
     return IngestResult(cik, data.get("name") or "", pages, len(rows), inserted, updated, newly_missing, snapshot_changed,
                         recent_window_start, history_fetched)
@@ -382,17 +393,19 @@ def upsert_filings(conn: psycopg.Connection, rows: list[dict], run_id: int) -> t
 
 
 def _mark_missing(conn: psycopg.Connection, cik: int, window_start: date | None, seen: set[str], today: date) -> list[str]:
-    """Filings inside the window this fetch covered (the recent page, or all history on a backfill) that the
-    pages no longer list. Rows already flagged stay flagged until they reappear."""
+    """Filings this registrant listed before (as owner or co-registrant), inside the window this fetch covered (the
+    recent page, or all history on a backfill), that no page of this run lists. Rows already flagged stay flagged
+    until they reappear."""
     if window_start is None:
         return []
     with conn.cursor() as cur:
         cur.execute(
             """
             SELECT accession_number FROM filings
-            WHERE cik = %s AND filing_date >= %s AND not_seen_since IS NULL AND NOT (accession_number = ANY(%s))
+            WHERE (cik = %s OR %s = ANY(also_filed_by_ciks)) AND filing_date >= %s AND not_seen_since IS NULL
+              AND NOT (accession_number = ANY(%s))
             """,
-            (cik, window_start, list(seen)),
+            (cik, cik, window_start, list(seen)),
         )
         missing = [row["accession_number"] for row in cur.fetchall()]
         if missing:
@@ -410,7 +423,11 @@ def _store_snapshot(conn: psycopg.Connection, cik: int, page: str, run_id: int, 
         )
         last = cur.fetchone()
         if last and last["sha256"] == digest:
-            cur.execute("UPDATE source_snapshots SET last_seen_run = %s WHERE id = %s", (run_id, last["id"]))
+            # same content: record the observation, and repair a body stored trimmed by an earlier version
+            cur.execute(
+                "UPDATE source_snapshots SET last_seen_run = %s, body = CASE WHEN body ? 'cik' THEN body ELSE %s END WHERE id = %s",
+                (run_id, Jsonb(body), last["id"]),
+            )
             return False
         cur.execute(
             """
@@ -420,6 +437,48 @@ def _store_snapshot(conn: psycopg.Connection, cik: int, page: str, run_id: int, 
             (cik, page, digest, run_id, run_id, Jsonb(body)),
         )
     return True
+
+
+def _advance_coverage(conn: psycopg.Connection, cik: int, recent_window_start: date | None, history_fetched: bool, today: date) -> None:
+    """Per-filer coverage watermark. History read: coverage is complete through today and any gap is cleared.
+    Otherwise the recent page extends coverage only if it overlaps the watermark (its oldest filing is not newer
+    than the watermark); a page that starts after the watermark means filings may have passed unseen: the gap is
+    recorded and the watermark stays until history is read. A filer seen for the first time without history starts
+    its watermark today."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT coverage_through FROM filers WHERE cik = %s", (cik,))
+        row = cur.fetchone()
+        through = row["coverage_through"] if row else None
+        if history_fetched or through is None:
+            cur.execute(
+                "UPDATE filers SET recent_window_start = %s, coverage_through = %s, coverage_gap_since = NULL, "
+                "backfill_completed_at = CASE WHEN %s THEN now() ELSE backfill_completed_at END WHERE cik = %s",
+                (recent_window_start, today, history_fetched, cik),
+            )
+        elif recent_window_start is None or recent_window_start <= through:
+            cur.execute("UPDATE filers SET recent_window_start = %s, coverage_through = %s WHERE cik = %s", (recent_window_start, today, cik))
+        else:
+            cur.execute(
+                "UPDATE filers SET recent_window_start = %s, coverage_gap_since = COALESCE(coverage_gap_since, %s) WHERE cik = %s",
+                (recent_window_start, today, cik),
+            )
+
+
+def ciks_awaiting_sec_labels(conn: psycopg.Connection, ciks: list[int], accepted_accessions: set[str] | None = None, limit: int = 30) -> list[int]:
+    """Filers with XBRL-era reports that have no SEC label yet (accepted no-label cases excluded): refreshed every
+    run until the label arrives, so a failed or lagging refresh is retried without anyone noticing it. Bounded per
+    run; the rest follow on the next run."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT fl.cik, count(*) AS n FROM filings fl LEFT JOIN sec_labels s USING (accession_number)
+            WHERE fl.cik = ANY(%s) AND fl.family IN ('annual', 'quarterly') AND coalesce(fl.is_xbrl, false)
+              AND s.accession_number IS NULL AND NOT (fl.accession_number = ANY(%s))
+            GROUP BY fl.cik ORDER BY n DESC, fl.cik LIMIT %s
+            """,
+            (ciks, list(accepted_accessions or ()), limit),
+        )
+        return [r["cik"] for r in cur.fetchall()]
 
 
 def apply_filing_corrections(conn: psycopg.Connection, corrections: dict[str, dict]) -> int:

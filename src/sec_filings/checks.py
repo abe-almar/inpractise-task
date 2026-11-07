@@ -32,7 +32,7 @@ DEADLINES: dict[str, dict[str, tuple[str, int] | None]] = {
 }
 NT_GRACE = {"annual": 15, "quarterly": 5}
 PERIOD_MATCH_DAYS = 10          # a notice's period and a nominal period end are the same period within this
-SEC_LABEL_PENDING_DAYS = 21     # XBRL facts can lag the filing; younger unlabelled filings are "pending", not missing
+SEC_LABEL_PENDING_DAYS = 21     # XBRL facts can lag the filing; younger unlabelled filings are "pending", not findings
 
 
 @dataclass
@@ -104,7 +104,8 @@ def run_checks(conn: psycopg.Connection, facts: RunFacts, overrides, today: date
         check_tickers_resolved(facts),
         check_cik_changes_acknowledged(conn, facts),
         check_fiscal_year_end_known(conn),
-        check_history_gap(facts),
+        check_history_gap(conn, facts),
+        check_sec_labels_refreshed(facts),
         check_no_filings_lost(conn, facts),
         check_labels_complete(conn),
         check_labels_unique(conn),
@@ -217,18 +218,36 @@ def check_fiscal_year_end_known(conn: psycopg.Connection) -> CheckResult:
     )
 
 
-def check_history_gap(f: RunFacts) -> CheckResult:
-    """If the previous successful run is older than the oldest filing on today's recent page, filings may have
-    entered and left the page unseen: a backfill is needed before the table can be called complete."""
-    if f.previous_ok_run_started is None:
-        return CheckResult("history_gap", "hard", True, "first successful run; nothing to compare with", {})
-    items = [{"key": str(cik), "cik": cik, "recent_page_starts": str(ws), "previous_ok_run": str(f.previous_ok_run_started)}
-             for cik, ws in f.window_starts.items() if ws is not None and ws > f.previous_ok_run_started]
+def check_history_gap(conn: psycopg.Connection, f: RunFacts) -> CheckResult:
+    """A filer whose recent page started after its coverage watermark may have had filings pass through unseen. The
+    gap is persistent state on the filer (`coverage_gap_since`) until a history read (backfill) clears it; a later
+    run that merely reaches its checks does not (the watermark only advances when a page overlaps it)."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT DISTINCT cc.ticker, fl.cik, fl.coverage_gap_since, fl.recent_window_start FROM filers fl
+            JOIN company_ciks cc ON cc.cik = fl.cik JOIN companies c ON c.ticker = cc.ticker
+            WHERE c.active AND fl.coverage_gap_since IS NOT NULL ORDER BY cc.ticker
+            """
+        )
+        rows = cur.fetchall()
+    items = [{"key": str(r["cik"]), "ticker": r["ticker"], "cik": r["cik"], "gap_since": str(r["coverage_gap_since"]),
+              "recent_page_starts": str(r["recent_window_start"])} for r in rows]
     return CheckResult(
         "history_gap", "hard", not items,
-        f"previous successful run {f.previous_ok_run_started} is inside every filer's recent page" if not items
-        else f"{len(items)} filer(s) whose recent page starts after the previous successful run ({f.previous_ok_run_started}); run `sec-filings backfill --full`",
+        "every filer's recent page overlaps its coverage watermark; no coverage gap on record" if not items
+        else f"{len(items)} filer(s) with a coverage gap on record (recent page started after the filer's coverage watermark); run `sec-filings backfill` (it re-reads the history of the filers with a gap)",
         {"items": items},
+    )
+
+
+def check_sec_labels_refreshed(f: RunFacts) -> CheckResult:
+    items = [{"key": str(cik), "cik": cik, "error": msg} for cik, msg in f.sec_label_refresh_errors.items()]
+    return CheckResult(
+        "sec_labels_refreshed", "hard", not items,
+        f"SEC labels refreshed for {len(f.sec_labels_refreshed)} filer(s)" if not items
+        else f"SEC label refresh failed for {len(items)} filer(s); retried automatically next run",
+        {"items": items, "refreshed": f.sec_labels_refreshed},
     )
 
 
@@ -309,11 +328,14 @@ def check_labels_unique_across_ciks(conn: psycopg.Connection) -> CheckResult:
         cur.execute(
             """
             SELECT cc.ticker, fl.family, fl.fiscal_year, fl.fiscal_period,
-                   array_agg(DISTINCT fl.cik) AS ciks, array_agg(fl.accession_number ORDER BY fl.filing_date) AS accessions
-            FROM filings fl JOIN company_ciks cc ON cc.cik = fl.cik
+                   array_agg(DISTINCT r.cik) AS ciks, array_agg(DISTINCT fl.accession_number) AS accessions
+            FROM filings fl
+            JOIN (SELECT accession_number, cik FROM filings
+                  UNION SELECT accession_number, unnest(also_filed_by_ciks) FROM filings) r USING (accession_number)
+            JOIN company_ciks cc ON cc.cik = r.cik
             WHERE fl.family IN ('annual', 'quarterly') AND NOT fl.is_amendment AND fl.fiscal_year IS NOT NULL
             GROUP BY cc.ticker, fl.family, fl.fiscal_year, fl.fiscal_period
-            HAVING count(DISTINCT fl.cik) > 1 ORDER BY cc.ticker, fl.fiscal_year
+            HAVING count(DISTINCT fl.accession_number) > 1 AND count(DISTINCT r.cik) > 1 ORDER BY cc.ticker, fl.fiscal_year
             """
         )
         rows = cur.fetchall()
@@ -442,8 +464,6 @@ def check_labels_match_sec(conn: psycopg.Connection, conventions: dict[str, dict
     overrides.toml [[naming_conventions]], in the stated direction and period; everything else is a real
     disagreement that a person must look at. Filings without a SEC label yet are counted, not hidden."""
     with conn.cursor() as cur:
-        cur.execute("SELECT count(*) AS n FROM sec_labels")
-        n_labels = cur.fetchone()["n"]
         cur.execute(
             """
             SELECT cc.ticker, fl.accession_number, fl.form, fl.filing_date, fl.report_date, fl.fiscal_year, fl.fiscal_period,
@@ -459,16 +479,16 @@ def check_labels_match_sec(conn: psycopg.Connection, conventions: dict[str, dict
         compared = cur.fetchone()["n"]
         cur.execute(
             """
-            SELECT count(*) FILTER (WHERE fl.filing_date > %s) AS pending,
-                   count(*) FILTER (WHERE fl.filing_date <= %s) AS unlabelled
-            FROM filings fl LEFT JOIN sec_labels s USING (accession_number)
+            SELECT cc.ticker, fl.accession_number, fl.form, fl.filing_date
+            FROM filings fl LEFT JOIN sec_labels s USING (accession_number) JOIN company_ciks cc ON cc.cik = fl.cik
             WHERE fl.family IN ('annual', 'quarterly') AND s.accession_number IS NULL AND coalesce(fl.is_xbrl, false)
-            """,
-            (today - timedelta(days=SEC_LABEL_PENDING_DAYS), today - timedelta(days=SEC_LABEL_PENDING_DAYS)),
+            ORDER BY fl.filing_date
+            """
         )
-        cov = cur.fetchone()
-    if n_labels == 0:
-        return CheckResult("labels_match_sec", "info", True, "no SEC labels loaded yet (run sec-filings verify-labels)", {})
+        unlabelled = cur.fetchall()
+    cutoff = today - timedelta(days=SEC_LABEL_PENDING_DAYS)
+    pending = [r for r in unlabelled if r["filing_date"] > cutoff]
+    overdue_labels = [r for r in unlabelled if r["filing_date"] <= cutoff]
 
     def is_convention(r) -> bool:
         c = conventions.get(r["ticker"])
@@ -481,17 +501,21 @@ def check_labels_match_sec(conn: psycopg.Connection, conventions: dict[str, dict
     convention = [r for r in rows if is_convention(r)]
     anomalies = [r for r in rows if not is_convention(r)]
     by_ticker = Counter(r["ticker"] for r in convention)
-    items = [{"key": r["accession_number"], "ticker": r["ticker"], "form": r["form"], "report_date": str(r["report_date"]),
-              "ours": f"{r['fiscal_year']} {r['fiscal_period']}", "sec": f"{r['sec_year']} {r['sec_period']}"} for r in anomalies]
+    items = [{"key": r["accession_number"], "kind": "disagreement", "ticker": r["ticker"], "form": r["form"],
+              "report_date": str(r["report_date"]), "ours": f"{r['fiscal_year']} {r['fiscal_period']}",
+              "sec": f"{r['sec_year']} {r['sec_period']}"} for r in anomalies]
+    items += [{"key": r["accession_number"], "kind": "no_sec_label", "ticker": r["ticker"], "form": r["form"],
+               "filed": str(r["filing_date"])} for r in overdue_labels]
     naming = ", ".join(f"{t} {n}" for t, n in sorted(by_ticker.items()))
-    summary = f"{len(items)} real disagreement(s) with the SEC's XBRL label on {compared} filings compared"
+    summary = (f"{len(anomalies)} real disagreement(s) with the SEC's XBRL label on {compared} filings compared; "
+               f"{len(overdue_labels)} XBRL filing(s) older than {SEC_LABEL_PENDING_DAYS} days still without a SEC label")
     if convention:
         summary += f"; {len(convention)} are documented naming conventions ({naming})"
-    summary += f"; {cov['pending']} recent XBRL filing(s) awaiting a SEC label, {cov['unlabelled']} older without one"
+    summary += f"; {len(pending)} recent filing(s) awaiting one"
     return CheckResult(
         "labels_match_sec", "hard", not items, summary,
         {"items": items, "compared": compared, "naming_convention_counts": dict(by_ticker),
-         "pending_sec_label": cov["pending"], "older_without_sec_label": cov["unlabelled"]},
+         "pending_sec_label": len(pending), "older_without_sec_label": len(overdue_labels)},
     )
 
 

@@ -1,7 +1,7 @@
 # The morning check
 
 If tomorrow's 06:00 run is wrong, what tells us? Not the exit code of a crash: a run can finish green and still be
-wrong. So every run ends by evaluating fifteen named conditions against the database and recording them in the
+wrong. So every run ends by evaluating sixteen named conditions against the database and recording them in the
 `checks` table, and the process exits 0 only when the run completed **and** every hard check passed. The scheduler
 alerts on a non-zero exit; a person (or an agent) then runs `sec-filings check`, which prints the latest run's
 stored checks without touching EDGAR, and adds one condition of its own: that a successful run started today.
@@ -14,12 +14,13 @@ stored checks without touching EDGAR, and adds one condition of its own: that a 
 | `tickers_resolved` | hard | a ticker in `companies.csv` is not in `company_tickers.json` and has no evidenced CIK override | the company would silently stop being tracked |
 | `cik_changes_acknowledged` | hard | a ticker now maps to a different CIK than before, and nobody has recorded the old CIK in `overrides.toml` | Exxon did exactly this on 2026-07-01; a job keyed on the new CIK loses thirty years |
 | `fiscal_year_end_known` | hard | a filer has no fiscal year end in EDGAR and no override | no label can be derived (Alibaba's is null in EDGAR) |
-| `history_gap` | hard | the previous successful run is older than the oldest filing on a filer's recent page | filings could have entered and left the page during the outage; a backfill is needed |
+| `history_gap` | hard | a filer has a coverage gap on record: its recent page started after the filer's coverage watermark (the date through which its filings are known complete, advanced only by a page that overlaps it or by a history read); the gap stays until `backfill` re-reads that filer's history | filings could have entered and left the page during the outage; a later run merely reaching its checks does not bridge it (`docs/evidence/outage-recovery-2026-11-07.log`) |
+| `sec_labels_refreshed` | hard | the refresh of the SEC's XBRL labels failed for a filer | the cross-check would silently stop covering new filings; the refresh is retried every run while a filing is unlabelled |
 | `no_filings_lost` | hard | any filing we have seen is no longer listed in the window the page covers, until it reappears or is accepted | EDGAR does delete after acceptance; the row stays, flagged, and someone decides; the alarm does not fade after one morning |
 | `labels_complete` | hard | a report has no fiscal year, period or method | the one-row question cannot be answered |
 | `labels_unique` | hard | two original reports share (company, year, period) under one CIK | two answers to the one-row question; the first backfill found four, all EDGAR metadata quirks; the fresh agent found a fifth (Disney, period a year off) |
 | `labels_inferred_for_amendments` | hard | an amendment's EDGAR period is its filing date and its label came from inference, not yet read and accepted | the inference pointed at the wrong quarter once (Apple, 1997) |
-| `labels_match_sec` | hard | our label and the SEC's XBRL label disagree in a way that is not a listed naming convention or an accepted finding | either an SEC data error or ours; both get a look |
+| `labels_match_sec` | hard | our label and the SEC's XBRL label disagree in a way that is not a listed naming convention or an accepted finding, or an XBRL-era filing older than three weeks still has no SEC label | either an SEC data error or ours; both get a look; a missing label is verification that never happened |
 | `http_health` | soft | EDGAR returned errors (even if retries succeeded) or the run took longer than the budget | an early sign of rate limiting or an outage |
 | `labels_unique_across_ciks` | soft | two CIKs of the same company both filed an original for one period | normal in a reorganisation year; worth a look |
 | `labels_far_from_calendar` | soft | a report's period of report is not on the company's fiscal calendar | the label is best effort; most cases are EDGAR storing the filing date as the period |

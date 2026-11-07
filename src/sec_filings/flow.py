@@ -56,7 +56,7 @@ def daily_run(settings: Settings, mode: str = "daily", client: EdgarClient | Non
     conn = db.connect(settings.database_url)
     try:
         db.migrate(conn)
-        previous = report.previous_ok_run(conn)
+        previous = report.previous_clean_run(conn)
         previous_started = previous["started_at"].astimezone(timezone.utc).date() if previous else None
         with conn.cursor() as cur:
             cur.execute("INSERT INTO runs (mode) VALUES (%s) RETURNING id", (mode,))
@@ -67,6 +67,7 @@ def daily_run(settings: Settings, mode: str = "daily", client: EdgarClient | Non
         newly_missing: dict[int, list[str]] = {}
         window_starts: dict[int, date | None] = {}
         ciks_with_new_reports: list[int] = []
+        seen_this_run: set[str] = set()
         try:
             loader.sync_companies(conn, tickers, overrides)
             resolution = loader.resolve_ciks(conn, client, run_id, tickers)
@@ -79,7 +80,7 @@ def daily_run(settings: Settings, mode: str = "daily", client: EdgarClient | Non
                 # stored so the fiscal_year_end_known check sees that a year end is known even if only dated entries exist
                 fye_override = loader.effective_fye(None, fye_entries, today) or (fye_entries[-1]["mmdd"] if fye_entries else None)
                 try:
-                    ingest = loader.ingest_filer(conn, client, run_id, cik, mode == "backfill", fye_override, today, full=full)
+                    ingest = loader.ingest_filer(conn, client, run_id, cik, mode == "backfill", fye_override, today, full=full, seen_this_run=seen_this_run)
                 except EdgarError as exc:
                     conn.rollback()
                     result.fetch_errors[cik] = str(exc)
@@ -111,8 +112,11 @@ def daily_run(settings: Settings, mode: str = "daily", client: EdgarClient | Non
         # keep the SEC cross-check current for filers that gained reports (daily runs; backfill uses verify-labels)
         refreshed: list[int] = []
         refresh_errors: dict[int, str] = {}
-        if result.status == "ok" and mode == "daily" and ciks_with_new_reports:
-            for cik in ciks_with_new_reports:
+        if result.status == "ok":
+            accepted_no_label = {str(a.get("key")) for a in overrides.accepted_findings if a.get("check") == "labels_match_sec"}
+            to_refresh = sorted(set(ciks_with_new_reports)
+                                | set(loader.ciks_awaiting_sec_labels(conn, list(window_starts), accepted_no_label)))
+            for cik in to_refresh:
                 try:
                     verify.refresh_sec_labels(conn, client, [cik])
                     refreshed.append(cik)

@@ -11,7 +11,7 @@ You need Python 3.12+ and a Postgres database. The quickest local database is th
 docker compose up -d                                   # local Postgres 17 (skip if you have one)
 python3.12 -m venv .venv && .venv/bin/pip install -e .
 export DATABASE_URL=postgresql://sec:sec@localhost:5432/sec_filings
-.venv/bin/sec-filings backfill                         # first time: every history page, read once per filer (--full re-reads)
+.venv/bin/sec-filings backfill                         # first time: every history page, read once per filer; later only for new filers or gaps (--full: everyone)
 ```
 
 The one command the scheduler calls every morning:

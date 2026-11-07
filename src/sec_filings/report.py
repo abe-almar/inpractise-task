@@ -49,13 +49,17 @@ def latest_run(conn: psycopg.Connection) -> dict | None:
         return cur.fetchone()
 
 
-def previous_ok_run(conn: psycopg.Connection, before_run_id: int | None = None) -> dict | None:
+def previous_clean_run(conn: psycopg.Connection, before_run_id: int | None = None) -> dict | None:
+    """The last run that completed AND passed its hard checks: the only kind that counts as coverage."""
     with conn.cursor() as cur:
         if before_run_id is None:
-            cur.execute("SELECT * FROM runs WHERE status = 'ok' ORDER BY id DESC LIMIT 1")
+            cur.execute("SELECT * FROM runs WHERE status = 'ok' AND checks_passed IS TRUE ORDER BY id DESC LIMIT 1")
         else:
-            cur.execute("SELECT * FROM runs WHERE status = 'ok' AND id < %s ORDER BY id DESC LIMIT 1", (before_run_id,))
+            cur.execute("SELECT * FROM runs WHERE status = 'ok' AND checks_passed IS TRUE AND id < %s ORDER BY id DESC LIMIT 1", (before_run_id,))
         return cur.fetchone()
+
+
+previous_ok_run = previous_clean_run  # old name
 
 
 def checks_of_run(conn: psycopg.Connection, run_id: int) -> list[dict]:

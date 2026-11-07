@@ -48,7 +48,8 @@ The full log with alternatives and evidence is `docs/decisions.md`. The ones tha
   A wrong EDGAR "period of report" is corrected per filing under `[[filing_corrections]]` with evidence, never by
   editing rows or bending the rule. A fiscal year end that changed over time is a dated `[[fiscal_year_ends]]` entry.
 - **D5 never delete.** A filing that disappears from EDGAR gets `not_seen_since`, a hard check fails every morning
-  until it reappears or a person accepts it. Backfill reads history pages once per filer (`--full` re-reads them).
+  until it reappears or a person accepts it. Backfill reads history pages once per filer, again for a filer with a
+  coverage gap on record, and for everyone with `--full`.
 - **D6 fair access.** User agent with a contact address, 5 requests per second, no crawling. Do not raise the
   rate; the daily run is about one request per CIK plus one for the ticker map.
 - **D9 checks.** Hard checks fail the process; soft ones warn. Accepting a finding is an explicit entry in
@@ -99,12 +100,13 @@ The full log with alternatives and evidence is `docs/decisions.md`. The ones tha
 | `tickers_resolved` | section 4, step 4 |
 | `cik_changes_acknowledged` | the ticker moved to a new CIK. Compare both CIKs' submissions JSON (`name`, `formerNames`, first filing). Add the old CIK under `[[extra_ciks]]` with `valid_to` and the evidence. Both CIKs keep being fetched meanwhile; nothing is lost |
 | `fiscal_year_end_known` | section 4, step 4 |
-| `history_gap` | the previous successful run is older than the oldest filing on a filer's recent page, so filings may have passed through unseen: run `sec-filings backfill --full` |
+| `history_gap` | a filer has a coverage gap on record (its recent page started after the filer's coverage watermark, so filings may have passed through unseen): run `sec-filings backfill`, which re-reads the history of exactly the filers with a gap (`--full` re-reads everyone); the gap clears only when the history is read. `docs/evidence/outage-recovery-2026-11-07.log` shows the whole sequence |
+| `sec_labels_refreshed` | the SEC-label refresh failed for a filer (the items say why); it is retried on the next run, so rerun and look only if it persists |
 | `no_filings_lost` | EDGAR stopped listing a filing. Open its index URL. If EDGAR removed it (post-acceptance deletion), accept it with the reason; if it reappears the flag clears itself |
 | `labels_complete` | a report has no usable label: `no_report_date` (EDGAR gave none; add a `[[filing_corrections]]` entry from the cover) or `no_fye` (add the year end). Never edit rows by hand |
 | `labels_unique` | section 4, step 4 |
 | `labels_inferred_for_amendments` | section 4, step 4 |
-| `labels_match_sec` | section 4, step 5 |
+| `labels_match_sec` | section 4, step 5; an item of kind `no_sec_label` is an XBRL filing older than three weeks with no companyfacts facts (some amendments have none): check the companyfacts API for the accession and accept it with that reason |
 | `labels_unique_across_ciks` (soft) | two CIKs of one company both filed an original for the same period (reorganisation year). The view shows the current CIK's and lists the other; nothing to fix unless one is mislabelled |
 | `overdue_reports` (soft) | the company is late or EDGAR is quiet. Check the company's filing index; a timely `NT 10-K` already extended the deadline. Nothing to fix in the job unless every company is "overdue" at once (then the fetch is broken) |
 | `labels_far_from_calendar` (soft) | informational unless the count grows; new items need a look at the filing |
