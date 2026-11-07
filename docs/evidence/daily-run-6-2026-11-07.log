@@ -1,0 +1,28 @@
+run 6 (daily): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 requests=22 errors=0 duration=5s
+[ok  ] run_complete: fetched and validated 21 of 21 filer pages
+[ok  ] http_health: 0 EDGAR errors, 0 retries, 5s of a 600s budget
+[ok  ] tickers_resolved: every ticker is in company_tickers.json
+[ok  ] cik_changes_acknowledged: no ticker changed CIK
+[ok  ] fiscal_year_end_known: every filer has a fiscal year end
+[ok  ] history_gap: previous successful run 2026-11-07 is inside every filer's recent page
+[ok  ] no_filings_lost: no filing has disappeared from the EDGAR feed
+[ok  ] labels_complete: every report has a fiscal label
+[ok  ] labels_unique: one original report per company, year and period
+[ok  ] labels_unique_across_ciks: no period reported by two CIKs of one company
+[info] labels_inferred_for_amendments: 2 amendment(s) labelled from the filing date; read each document and accept the label in overrides.toml (all 2 accepted in overrides.toml)
+[WARN] labels_far_from_calendar: 20 filing(s) not labelled straight from the period of report: 19 from the filing date (EDGAR quirk), 1 off the fiscal calendar (best effort)
+        - {'key': '0000040554-14-000061', 'ticker': 'GE', 'form': '10-Q', 'filed': '2014-05-12', 'report_date': '2014-05-09', 'label': '2014 Q1', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 2014-05-09 is the filing date; labelled from the last quarterly period end before the filing date (2014-03-31)"}
+        - {'key': '0000040545-14-000034', 'ticker': 'GE', 'form': '10-Q', 'filed': '2014-07-31', 'report_date': '2014-07-31', 'label': '2014 Q2', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 2014-07-31 is the filing date; labelled from the last quarterly period end before the filing date (2014-06-30)"}
+        - {'key': '0000040545-14-000049', 'ticker': 'GE', 'form': '10-Q', 'filed': '2014-11-04', 'report_date': '2014-11-03', 'label': '2014 Q3', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 2014-11-03 is the filing date; labelled from the last quarterly period end before the filing date (2014-09-30)"}
+        - {'key': '0000040545-15-000030', 'ticker': 'GE', 'form': '10-K', 'filed': '2015-02-27', 'report_date': '2015-02-27', 'label': '2014 FY', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 2015-02-27 is the filing date; labelled from the last annual period end before the filing date (2014-12-31)"}
+        - {'key': '0000019617-94-000048', 'ticker': 'JPM', 'form': '10-K/A', 'filed': '1994-05-09', 'report_date': '1994-05-06', 'label': '1993 FY', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 1994-05-06 is the filing date; labelled from the last annual period end before the filing date (1993-12-31)"}
+        - {'key': '0000019617-95-000080', 'ticker': 'JPM', 'form': '10-K/A', 'filed': '1995-06-26', 'report_date': '1995-06-21', 'label': '1994 FY', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 1995-06-21 is the filing date; labelled from the last annual period end before the filing date (1994-12-31)"}
+        - {'key': '0001208646-12-000031', 'ticker': 'NVO', 'form': '20-F', 'filed': '2012-02-06', 'report_date': '2012-02-06', 'label': '2011 FY', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 2012-02-06 is the filing date; labelled from the last annual period end before the filing date (2011-12-31)"}
+        - {'key': '0001171843-15-000625', 'ticker': 'NVO', 'form': '20-F', 'filed': '2015-02-05', 'report_date': '2014-02-10', 'label': '2014 FY', 'method': 'rule_far', 'note': 'period end 2014-02-10 is 41 days from the nominal year end (MMDD 1231); transition period or a changed fiscal year end'}
+        - {'key': '0001156973-04-000314', 'ticker': 'SAP', 'form': '20-F', 'filed': '2004-03-23', 'report_date': '2004-03-23', 'label': '2003 FY', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 2004-03-23 is the filing date; labelled from the last annual period end before the filing date (2003-12-31)"}
+        - {'key': '0000732717-08-000012', 'ticker': 'T', 'form': '10-K', 'filed': '2008-02-27', 'report_date': '2008-02-26', 'label': '2007 FY', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 2008-02-26 is the filing date; labelled from the last annual period end before the filing date (2007-12-31)"}
+        ... 10 more
+[ok  ] overdue_reports: no company is past its filing deadline
+[info] labels_match_sec: 4 real disagreement(s) with the SEC's XBRL label on 1017 filings compared; 101 are documented naming conventions (GME 73, TM 8, WMT 20); 0 recent XBRL filing(s) awaiting a SEC label, 1 older without one (all 4 accepted in overrides.toml)
+[info] news: 0 new filing(s) this run, of which 0 amendment(s) or late-filing notice(s)
+RESULT: OK

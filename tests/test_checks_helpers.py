@@ -7,9 +7,19 @@ from datetime import date
 
 import pytest
 
+from sec_filings import checks
 from sec_filings.checks import (
-    CheckResult, apply_accepted, filer_category, format_results, hard_failures, next_business_day,
+    CheckResult, RunFacts, apply_accepted, filer_category, format_results, hard_failures, next_business_day,
+    statutory_deadline,
 )
+
+
+def facts(**kw) -> RunFacts:
+    base = dict(run_id=1, ciks_expected=3, ciks_fetched=3, http_errors=0, retries=0, duration_sec=1.0, time_budget_sec=600,
+                missing_tickers=[], resolved_by_override={}, changed_tickers=[], newly_missing={}, fetch_errors={},
+                previous_ok_run_started=None, window_starts={})
+    base.update(kw)
+    return RunFacts(**base)
 
 
 @pytest.mark.parametrize(
@@ -73,7 +83,7 @@ def test_apply_accepted_turns_a_fully_accepted_failure_into_info():
     assert out.detail["items"] == []
     assert out.detail["accepted"] == [{"key": "A", "forms": ["10-K", "10-K"]}]
     assert out.detail["count"] == 1            # the rest of the detail is kept
-    assert "accepted in overrides.toml" in out.summary
+    assert out.summary == "1 duplicate (all 1 accepted in overrides.toml)"   # the original summary is kept
 
 
 def test_apply_accepted_keeps_failing_when_one_item_remains():
@@ -106,6 +116,72 @@ def test_apply_accepted_matches_plain_string_items_and_non_string_keys():
     numeric = CheckResult("no_filings_lost", "hard", False, "x", {"items": [{"key": 12}]})
     out = apply_accepted(numeric, [{"check": "no_filings_lost", "key": 12}])
     assert out.passed is True and out.severity == "info"
+
+
+@pytest.mark.parametrize(
+    "period_end,category,kind,expected",
+    [
+        (date(2027, 3, 31), "foreign_private_issuer", "annual", date(2027, 8, 2)),    # four calendar months, 31 July is a Saturday
+        (date(2026, 3, 31), "foreign_private_issuer", "annual", date(2026, 7, 31)),   # a Friday stays
+        (date(2026, 11, 30), "foreign_private_issuer", "annual", date(2027, 3, 31)),  # month end stays a month end
+        (date(2026, 12, 31), "large_accelerated", "annual", date(2027, 3, 1)),        # 60 days, Monday
+        (date(2026, 9, 26), "large_accelerated", "quarterly", date(2026, 11, 5)),     # 40 days
+        (date(2026, 12, 31), "accelerated", "annual", date(2027, 3, 16)),             # 75 days
+        (date(2026, 12, 31), "non_accelerated", "annual", date(2027, 3, 31)),         # 90 days
+        (date(2026, 9, 30), "non_accelerated", "quarterly", date(2026, 11, 16)),      # 45 days = Saturday 14th -> Monday
+        (date(2026, 9, 30), "foreign_private_issuer", "quarterly", None),            # no quarterly report expected
+    ],
+)
+def test_statutory_deadline(period_end, category, kind, expected):
+    assert statutory_deadline(period_end, category, kind) == expected
+
+
+def test_statutory_deadline_tables():
+    assert checks.DEADLINES["foreign_private_issuer"]["annual"] == ("months", 4)
+    assert checks.DEADLINES["large_accelerated"] == {"annual": ("days", 60), "quarterly": ("days", 40)}
+    assert checks.NT_GRACE == {"annual": 15, "quarterly": 5}
+
+
+def test_history_gap_first_run_passes_with_a_note():
+    out = checks.check_history_gap(facts(previous_ok_run_started=None, window_starts={1: date(2026, 11, 1)}))
+    assert out.name == "history_gap" and out.severity == "hard" and out.passed is True
+    assert out.summary == "first successful run; nothing to compare with"
+    assert out.detail == {}
+
+
+def test_history_gap_fails_when_a_recent_page_starts_after_the_previous_run():
+    out = checks.check_history_gap(facts(
+        previous_ok_run_started=date(2026, 1, 1),
+        window_starts={320193: date(1994, 1, 26), 2115436: date(2026, 7, 1), 34088: None},
+    ))
+    assert out.passed is False
+    assert out.detail["items"] == [{"key": "2115436", "cik": 2115436, "recent_page_starts": "2026-07-01", "previous_ok_run": "2026-01-01"}]
+    assert "backfill --full" in out.summary
+    ok = checks.check_history_gap(facts(previous_ok_run_started=date(2026, 7, 1), window_starts={2115436: date(2026, 7, 1)}))
+    assert ok.passed is True   # starting on the same day is not a gap
+    assert ok.summary == "previous successful run 2026-07-01 is inside every filer's recent page"
+
+
+def test_run_complete_counts_fetch_errors():
+    ok = checks.check_run_complete(facts())
+    assert ok.passed is True and ok.summary == "fetched and validated 3 of 3 filer pages" and ok.detail["items"] == []
+    bad = checks.check_run_complete(facts(ciks_fetched=2, fetch_errors={34088: "submissions page for CIK 34088 says cik='0000999999'"}))
+    assert bad.passed is False and bad.severity == "hard"
+    assert bad.summary == "fetched and validated 2 of 3 filer pages; 1 failed"
+    assert bad.detail["items"] == [{"key": "34088", "cik": 34088, "error": "submissions page for CIK 34088 says cik='0000999999'"}]
+    assert checks.check_run_complete(facts(ciks_expected=0, ciks_fetched=0)).passed is False
+    # fetched everything but one page failed validation after being counted: still a failure
+    assert checks.check_run_complete(facts(fetch_errors={1: "x"})).passed is False
+
+
+def test_tickers_resolved_reports_overrides():
+    out = checks.check_tickers_resolved(facts(resolved_by_override={"XOM": 34088}))
+    assert out.passed is True
+    assert out.summary == "every ticker is in company_tickers.json; 1 resolved by an evidenced override (XOM)"
+    assert out.detail == {"items": [], "resolved_by_override": [{"ticker": "XOM", "cik": 34088}]}
+    missing = checks.check_tickers_resolved(facts(missing_tickers=["ZZZZ"]))
+    assert missing.passed is False and missing.detail["items"] == [{"key": "ZZZZ"}]
+    assert missing.summary == "not in company_tickers.json and no current CIK override: ZZZZ"
 
 
 def test_format_results_and_hard_failures():

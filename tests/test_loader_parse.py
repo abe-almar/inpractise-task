@@ -8,7 +8,8 @@ from pathlib import Path
 import pytest
 
 from sec_filings import loader
-from sec_filings.loader import Overrides, load_companies, parse_page
+from sec_filings.edgar import EdgarError
+from sec_filings.loader import Overrides, load_companies, parse_page, validate_submissions
 
 from conftest import FIXTURE_FILES, TRACKED_FORMS, load_fixture
 
@@ -210,13 +211,119 @@ why = "SPAC shell 10-K"
     )
     ov = Overrides.load(path)
     assert ov.extra_ciks == [{
-        "ticker": "XOM", "cik": 34088, "valid_to": "2026-07-01",   # a quoted TOML value stays a string here
+        "ticker": "XOM", "cik": 34088, "current": False, "valid_from": None, "valid_to": date(2026, 7, 1),
         "note": "holding company reorganisation", "evidence": "CIK0000034088.json",
     }]
     assert isinstance(ov.extra_ciks[0]["cik"], int)
-    assert loader._as_date(ov.extra_ciks[0]["valid_to"]) == date(2026, 7, 1)   # what sync_companies stores
-    assert ov.fiscal_year_ends == {"BABA": {"ticker": "baba", "mmdd": "0331", "note": "20-F period ends"}}
+    assert ov.fiscal_year_ends == {"BABA": [{"ticker": "baba", "mmdd": "0331", "note": "20-F period ends", "valid_from": None, "valid_to": None}]}
     assert ov.accepted_findings == [{"check": "labels_unique", "key": "LCID/1811210/annual/2020/FY", "why": "SPAC shell 10-K"}]
+    assert ov.naming_conventions == {} and ov.filing_notes == {} and ov.filing_corrections == {}
+
+
+def test_overrides_dates_quoted_or_bare_and_current_flag(tmp_path: Path):
+    path = tmp_path / "overrides.toml"
+    path.write_text(
+        '[[extra_ciks]]\nticker = "XOM"\ncik = 34088\nvalid_from = 1999-11-30\nvalid_to = "2026-07-01T00:00:00"\ncurrent = true\n'
+        '[[extra_ciks]]\nticker = "T"\ncik = "732717"\n',
+        encoding="utf-8",
+    )
+    ov = Overrides.load(path)
+    assert ov.extra_ciks[0]["valid_from"] == date(1999, 11, 30)
+    assert ov.extra_ciks[0]["valid_to"] == date(2026, 7, 1)
+    assert ov.extra_ciks[0]["current"] is True
+    assert ov.extra_ciks[1] == {"ticker": "T", "cik": 732717, "current": False, "valid_from": None, "valid_to": None}
+
+
+def test_overrides_fiscal_year_ends_keep_every_dated_entry_per_ticker(tmp_path: Path):
+    path = tmp_path / "overrides.toml"
+    path.write_text(
+        '[[fiscal_year_ends]]\nticker = "abc"\nmmdd = "0630"\nvalid_to = 2019-06-30\n'
+        '[[fiscal_year_ends]]\nticker = "ABC"\nmmdd = "1231"\nvalid_from = "2019-07-01"\n'
+        '[[fiscal_year_ends]]\nticker = "ABC"\nmmdd = "0229"\n',
+        encoding="utf-8",
+    )
+    ov = Overrides.load(path)
+    assert [(e["mmdd"], e["valid_from"], e["valid_to"]) for e in ov.fiscal_year_ends["ABC"]] == [
+        ("0630", None, date(2019, 6, 30)), ("1231", date(2019, 7, 1), None), ("0229", None, None),
+    ]
+    assert list(ov.fiscal_year_ends) == ["ABC"]
+
+
+def test_overrides_naming_conventions(tmp_path: Path):
+    path = tmp_path / "overrides.toml"
+    path.write_text(
+        '[[naming_conventions]]\nticker = "gme"\nsec_year_offset = -1\nnote = "start year"\n'
+        '[[naming_conventions]]\nticker = "WMT"\nsec_year_offset = -1\nuntil = 2014-03-21\n'
+        '[[naming_conventions]]\nticker = "ODD"\nsec_year_offset = 1\nuntil = "2020-01-01"\n'
+        '[[naming_conventions]]\nticker = "DEF"\n',
+        encoding="utf-8",
+    )
+    ov = Overrides.load(path)
+    assert ov.naming_conventions["GME"] == {"ticker": "gme", "sec_year_offset": -1, "note": "start year", "until": None}
+    assert ov.naming_conventions["WMT"]["until"] == date(2014, 3, 21)
+    assert ov.naming_conventions["ODD"] == {"ticker": "ODD", "sec_year_offset": 1, "until": date(2020, 1, 1)}
+    assert ov.naming_conventions["DEF"]["sec_year_offset"] == -1    # the default direction: year named by its start
+    assert set(ov.naming_conventions) == {"GME", "WMT", "ODD", "DEF"}
+
+
+@pytest.mark.parametrize("offset", ["0", "2", "-2", '"-1"'])
+def test_overrides_naming_conventions_offset_must_be_one_year(tmp_path: Path, offset):
+    path = tmp_path / "overrides.toml"
+    path.write_text(f'[[naming_conventions]]\nticker = "GME"\nsec_year_offset = {offset}\n', encoding="utf-8")
+    if offset == '"-1"':
+        assert Overrides.load(path).naming_conventions["GME"]["sec_year_offset"] == -1   # a quoted number is accepted
+    else:
+        with pytest.raises(ValueError, match="must be -1 or 1"):
+            Overrides.load(path)
+
+
+def test_overrides_naming_conventions_need_a_ticker(tmp_path: Path):
+    path = tmp_path / "overrides.toml"
+    path.write_text('[[naming_conventions]]\nsec_year_offset = -1\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="needs a ticker"):
+        Overrides.load(path)
+
+
+def test_overrides_filing_notes(tmp_path: Path):
+    path = tmp_path / "overrides.toml"
+    path.write_text('[[filing_notes]]\naccession = "0001104659-21-036537"\nnote = "SPAC shell"\n', encoding="utf-8")
+    assert Overrides.load(path).filing_notes == {"0001104659-21-036537": "SPAC shell"}
+    path.write_text('[[filing_notes]]\naccession = "0001104659-21-036537"\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="accession and note"):
+        Overrides.load(path)
+
+
+def test_overrides_filing_corrections(tmp_path: Path):
+    path = tmp_path / "overrides.toml"
+    path.write_text(
+        '[[filing_corrections]]\naccession = "0000320193-97-000021"\nreport_date = 1997-03-28\nnote = "Item 4 amendment"\n'
+        'evidence = "cover page read 2026-11-07"\n'
+        '[[filing_corrections]]\naccession = "0000000001-26-000001"\nreport_date = "2025-12-31"\nevidence = "x"\n',
+        encoding="utf-8",
+    )
+    ov = Overrides.load(path)
+    assert ov.filing_corrections["0000320193-97-000021"] == {
+        "accession": "0000320193-97-000021", "report_date": date(1997, 3, 28), "note": "Item 4 amendment",
+        "evidence": "cover page read 2026-11-07",
+    }
+    assert ov.filing_corrections["0000000001-26-000001"]["report_date"] == date(2025, 12, 31)
+
+
+@pytest.mark.parametrize(
+    "body,message",
+    [
+        ('accession = "0000320193-97-000021"\nevidence = "x"\n', "accession and report_date"),
+        ('accession = "0000320193-97-000021"\nreport_date = ""\nevidence = "x"\n', "accession and report_date"),
+        ('report_date = 1997-03-28\nevidence = "x"\n', "accession and report_date"),
+        ('accession = "0000320193-97-000021"\nreport_date = 1997-03-28\n', "needs evidence"),
+        ('accession = "0000320193-97-000021"\nreport_date = 1997-03-28\nevidence = ""\n', "needs evidence"),
+    ],
+)
+def test_overrides_filing_corrections_need_a_date_and_evidence(tmp_path: Path, body, message):
+    path = tmp_path / "overrides.toml"
+    path.write_text("[[filing_corrections]]\n" + body, encoding="utf-8")
+    with pytest.raises(ValueError, match=message):
+        Overrides.load(path)
 
 
 def test_overrides_bare_toml_date_is_a_date(tmp_path: Path):
@@ -224,16 +331,24 @@ def test_overrides_bare_toml_date_is_a_date(tmp_path: Path):
     path.write_text('[[extra_ciks]]\nticker = "XOM"\ncik = 34088\nvalid_to = 2026-07-01\n', encoding="utf-8")
     ov = Overrides.load(path)
     assert ov.extra_ciks[0]["valid_to"] == date(2026, 7, 1)
-    assert loader._as_date(ov.extra_ciks[0]["valid_to"]) == date(2026, 7, 1)
+
+
+def test_as_date_accepts_dates_datetimes_and_strings():
+    assert loader._as_date(None) is None and loader._as_date("") is None
+    assert loader._as_date(date(2026, 7, 1)) == date(2026, 7, 1)
+    assert loader._as_date(datetime(2026, 7, 1, 12, 30)) == date(2026, 7, 1)
+    assert loader._as_date("2026-07-01") == date(2026, 7, 1)
+    assert loader._as_date("2026-07-01T05:00:00.000Z") == date(2026, 7, 1)
 
 
 def test_overrides_missing_file_is_empty(tmp_path: Path):
     ov = Overrides.load(tmp_path / "nothing.toml")
     assert ov == Overrides()
     assert ov.extra_ciks == [] and ov.fiscal_year_ends == {} and ov.accepted_findings == []
+    assert ov.naming_conventions == {} and ov.filing_notes == {} and ov.filing_corrections == {}
 
 
-@pytest.mark.parametrize("mmdd", ['"331"', '"1332"', '"abcd"', "331", '""'])
+@pytest.mark.parametrize("mmdd", ['"331"', '"1332"', '"abcd"', "331", '""', '"0231"', '"0431"'])
 def test_overrides_rejects_bad_mmdd(tmp_path: Path, mmdd):
     path = tmp_path / "overrides.toml"
     path.write_text(f'[[fiscal_year_ends]]\nticker = "BABA"\nmmdd = {mmdd}\n', encoding="utf-8")
@@ -248,9 +363,87 @@ def test_overrides_extra_cik_needs_ticker_and_cik(tmp_path: Path):
         Overrides.load(path)
 
 
-def test_effective_fye_prefers_a_valid_override():
-    assert loader.effective_fye(None, "0331") == "0331"
+def test_effective_fye_without_entries_is_edgar_when_valid():
     assert loader.effective_fye("0926", None) == "0926"
-    assert loader.effective_fye("0926", "bad") == "0926"
+    assert loader.effective_fye("0926", []) == "0926"
+    assert loader.effective_fye("0926", [], date(2026, 9, 26)) == "0926"
     assert loader.effective_fye(None, None) is None
-    assert loader.effective_fye("", "") is None
+    assert loader.effective_fye("", []) is None
+    assert loader.effective_fye("0231", []) is None      # not a real date
+    assert loader.effective_fye("bad", None) is None
+
+
+def test_effective_fye_undated_entry_beats_edgar_and_the_last_one_wins():
+    entries = [{"mmdd": "0331"}, {"mmdd": "0630"}]
+    assert loader.effective_fye(None, entries) == "0630"
+    assert loader.effective_fye("1231", entries) == "0630"
+    assert loader.effective_fye("1231", entries, date(2001, 1, 1)) == "0630"
+    assert loader.effective_fye("1231", [{"mmdd": "0331", "valid_from": None, "valid_to": None}]) == "0331"
+
+
+def test_effective_fye_dated_entry_applies_to_its_period_only():
+    entries = [
+        {"mmdd": "0630", "valid_from": None, "valid_to": date(2019, 6, 30)},
+        {"mmdd": "1231", "valid_from": date(2019, 7, 1), "valid_to": None},
+    ]
+    assert loader.effective_fye("0926", entries, date(2018, 6, 30)) == "0630"
+    assert loader.effective_fye("0926", entries, date(2019, 6, 30)) == "0630"    # inclusive bounds
+    assert loader.effective_fye("0926", entries, date(2019, 7, 1)) == "1231"
+    assert loader.effective_fye("0926", entries, date(2026, 12, 31)) == "1231"
+    # without a period the dated entries are ignored: EDGAR's value is all that is left
+    assert loader.effective_fye("0926", entries) == "0926"
+    assert loader.effective_fye(None, entries) is None
+    # a period outside every validity window falls back to the undated entry, then to EDGAR
+    bounded = [{"mmdd": "0630", "valid_from": date(2010, 1, 1), "valid_to": date(2019, 6, 30)}]
+    assert loader.effective_fye("0926", bounded, date(2026, 1, 1)) == "0926"
+    assert loader.effective_fye("0926", bounded + [{"mmdd": "0331"}], date(2026, 1, 1)) == "0331"
+    assert loader.effective_fye("0926", bounded + [{"mmdd": "0331"}], date(2015, 1, 1)) == "0630"   # dated wins inside its window
+
+
+# ----------------------------------------------------------------------------- validate_submissions
+
+def _page(cik="0000320193", n=2, **overrides):
+    recent = {
+        "accessionNumber": [f"0000320193-26-00000{i}" for i in range(n)],
+        "form": ["10-K"] * n,
+        "filingDate": ["2026-11-03"] * n,
+        "reportDate": ["2026-09-26"] * n,
+    }
+    recent.update(overrides)
+    return {"cik": cik, "name": "Apple Inc.", "filings": {"recent": recent, "files": []}}
+
+
+def test_validate_submissions_returns_the_recent_block():
+    page = _page()
+    assert validate_submissions(320193, page) is page["filings"]["recent"]
+    assert validate_submissions(320193, _page(cik=320193)) is not None       # an integer cik is fine too
+    assert validate_submissions(320193, _page(cik="320193")) is not None
+    assert validate_submissions(0, _page(cik="0000000000", n=1)) is not None
+
+
+def test_validate_submissions_rejects_another_filers_page():
+    with pytest.raises(EdgarError, match="says cik='0000034088'"):
+        validate_submissions(320193, _page(cik="0000034088"))
+    with pytest.raises(EdgarError, match="says cik="):
+        validate_submissions(320193, {"name": "no cik at all", "filings": {"recent": {"accessionNumber": ["x"]}}})
+
+
+def test_validate_submissions_rejects_an_empty_or_ragged_recent_block():
+    with pytest.raises(EdgarError, match="empty recent block"):
+        validate_submissions(320193, _page(n=0))
+    with pytest.raises(EdgarError, match="empty recent block"):
+        validate_submissions(320193, {"cik": "0000320193", "filings": {}})
+    with pytest.raises(EdgarError, match="empty recent block"):
+        validate_submissions(320193, {"cik": "0000320193"})
+    with pytest.raises(EdgarError, match="column form has a different length"):
+        validate_submissions(320193, _page(form=["10-K"]))
+    with pytest.raises(EdgarError, match="column filingDate has a different length"):
+        validate_submissions(320193, _page(filingDate=["2026-11-03", "2026-11-03", "2026-11-03"]))
+    with pytest.raises(EdgarError, match="column form"):
+        validate_submissions(320193, _page(form=None))
+
+
+@pytest.mark.parametrize("file_name", sorted(FIXTURE_FILES.values()))
+def test_fixtures_pass_validation(file_name):
+    page = load_fixture(file_name)
+    assert validate_submissions(int(page["cik"]), page) is page["filings"]["recent"]

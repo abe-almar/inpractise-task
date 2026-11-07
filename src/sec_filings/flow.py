@@ -76,7 +76,8 @@ def daily_run(settings: Settings, mode: str = "daily", client: EdgarClient | Non
             result.ciks_expected = len(pairs)
             for ticker, cik in pairs:
                 fye_entries = overrides.fiscal_year_ends.get(ticker) or []
-                fye_override = loader.effective_fye(None, fye_entries, today)
+                # stored so the fiscal_year_end_known check sees that a year end is known even if only dated entries exist
+                fye_override = loader.effective_fye(None, fye_entries, today) or (fye_entries[-1]["mmdd"] if fye_entries else None)
                 try:
                     ingest = loader.ingest_filer(conn, client, run_id, cik, mode == "backfill", fye_override, today, full=full)
                 except EdgarError as exc:

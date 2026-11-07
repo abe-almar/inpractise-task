@@ -174,7 +174,10 @@ def test_report_kind(form, expected):
 @pytest.mark.parametrize(
     "mmdd,expected",
     [("1231", True), ("0926", True), ("0229", True), ("0131", True), (None, False), ("", False), ("abcd", False),
-     ("1332", False), ("0000", False), ("031", False), ("01311", False), ("0132", False)],
+     ("1332", False), ("0000", False), ("031", False), ("01311", False), ("0132", False),
+     # a real month and day: 29 February is allowed (clipped in common years), the 31st of a 30-day month is not
+     ("0231", False), ("0230", False), ("0430", True), ("0431", False), ("0631", False), ("0931", False),
+     ("1131", False), ("0331", True), ("0531", True), ("1031", True), ("1231", True), ("0100", False)],
 )
 def test_valid_mmdd(mmdd, expected):
     assert fiscal.valid_mmdd(mmdd) is expected

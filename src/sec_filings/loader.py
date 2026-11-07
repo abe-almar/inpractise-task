@@ -355,7 +355,8 @@ ON CONFLICT (accession_number) DO UPDATE SET
     film_number = CASE WHEN filings.cik = EXCLUDED.cik THEN COALESCE(EXCLUDED.film_number, filings.film_number) ELSE filings.film_number END,
     primary_document = CASE WHEN filings.cik = EXCLUDED.cik THEN COALESCE(EXCLUDED.primary_document, filings.primary_document) ELSE filings.primary_document END,
     primary_doc_description = CASE WHEN filings.cik = EXCLUDED.cik THEN COALESCE(EXCLUDED.primary_doc_description, filings.primary_doc_description) ELSE filings.primary_doc_description END,
-    primary_document_url = CASE WHEN filings.cik = EXCLUDED.cik THEN COALESCE(EXCLUDED.primary_document_url, filings.primary_document_url) ELSE filings.primary_document_url END,
+    -- the URL follows the document: a page that names no document keeps the URL of the document already stored
+    primary_document_url = CASE WHEN filings.cik = EXCLUDED.cik AND EXCLUDED.primary_document IS NOT NULL THEN EXCLUDED.primary_document_url ELSE filings.primary_document_url END,
     is_xbrl = CASE WHEN filings.cik = EXCLUDED.cik THEN COALESCE(EXCLUDED.is_xbrl, filings.is_xbrl) ELSE filings.is_xbrl END,
     is_inline_xbrl = CASE WHEN filings.cik = EXCLUDED.cik THEN COALESCE(EXCLUDED.is_inline_xbrl, filings.is_inline_xbrl) ELSE filings.is_inline_xbrl END,
     size_bytes = CASE WHEN filings.cik = EXCLUDED.cik THEN COALESCE(EXCLUDED.size_bytes, filings.size_bytes) ELSE filings.size_bytes END,

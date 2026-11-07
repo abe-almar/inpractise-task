@@ -207,5 +207,27 @@ def test_document_url():
 
 def test_stats_start_empty():
     assert Stats() == Stats(requests=0, retries=0, http_errors=0, bytes=0, urls=[])
-    assert edgar.RETRY_STATUSES == {429, 500, 502, 503, 504}
     assert json.loads(b"{}") == {}
+
+
+def test_retry_statuses_are_rate_limits_timeouts_and_every_5xx():
+    assert edgar.RETRY_STATUSES == {408, 429} | set(range(500, 600))
+    assert {500, 502, 503, 504, 599} <= edgar.RETRY_STATUSES
+    assert not {400, 401, 403, 404, 410, 418, 451} & edgar.RETRY_STATUSES
+
+
+@pytest.mark.parametrize("status", [408, 500, 501, 520, 599])
+def test_retried_statuses_are_retried_with_plain_backoff(status):
+    client, session, clock = make_client([FakeResponse(status), FakeResponse(200, b"ok")])
+    assert client.get_bytes(URL) == b"ok"
+    assert len(session.calls) == 2
+    assert client.stats.retries == 1 and client.stats.http_errors == 1
+    assert clock.sleeps == [1.0]   # only 429 doubles the backoff
+
+
+@pytest.mark.parametrize("status", [401, 403, 410, 418, 451])
+def test_other_4xx_fail_at_once(status):
+    client, session, clock = make_client([FakeResponse(status), FakeResponse(200, b"ok")])
+    with pytest.raises(EdgarError, match=f"HTTP {status}"):
+        client.get_bytes(URL)
+    assert len(session.calls) == 1 and client.stats.retries == 0 and clock.sleeps == []
