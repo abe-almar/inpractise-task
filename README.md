@@ -11,7 +11,7 @@ You need Python 3.12+ and a Postgres database. The quickest local database is th
 docker compose up -d                                   # local Postgres 17 (skip if you have one)
 python3.12 -m venv .venv && .venv/bin/pip install -e .
 export DATABASE_URL=postgresql://sec:sec@localhost:5432/sec_filings
-.venv/bin/sec-filings backfill                         # first time only: every page of every company's history
+.venv/bin/sec-filings backfill                         # first time: every history page, read once per filer (--full re-reads)
 ```
 
 The one command the scheduler calls every morning:
@@ -20,9 +20,9 @@ The one command the scheduler calls every morning:
 .venv/bin/sec-filings run
 ```
 
-It fetches the ticker map and the recent filings of every company (about 22 requests, a few seconds), upserts them,
-labels them, runs the morning checks, prints a report and exits 0 only when the run and every hard check passed.
-Running it twice in a morning changes nothing. `DATABASE_URL` is the only required setting; `SEC_USER_AGENT`,
+It fetches the ticker map and the recent filings of every CIK (one request each, a few seconds), validates each
+page, upserts the filings, labels them, refreshes the SEC's own labels for filers with news, runs the morning checks,
+prints a report and exits 0 only when the run and every hard check passed. Running it twice in a morning changes nothing. `DATABASE_URL` is the only required setting; `SEC_USER_AGENT`,
 `SEC_RATE_LIMIT_PER_SEC`, `COMPANIES_FILE` and `OVERRIDES_FILE` are optional (see `.env.example`; a `.env` in the
 working directory is read).
 
@@ -32,8 +32,8 @@ working directory is read).
 .venv/bin/sec-filings report AAPL 2009 FY      # what do we have for Apple's 2009 annual report? one row
 .venv/bin/sec-filings report WMT 2027 Q1       # a quarter (fiscal year = the calendar year in which the year ends)
 .venv/bin/sec-filings summary                  # one line per company
-.venv/bin/sec-filings check                    # the morning check against the latest run, no fetching
-.venv/bin/sec-filings verify-labels            # load the SEC's own XBRL labels and compare with ours
+.venv/bin/sec-filings check                    # the latest run's stored checks, no fetching, plus "did it run today"
+.venv/bin/sec-filings verify-labels            # reload the SEC's own XBRL labels for every filer; exit 1 on a real disagreement
 ```
 
 The same question in SQL, against the `reports` view (one row per company, family, fiscal year and period):
@@ -47,7 +47,7 @@ FROM reports WHERE ticker = 'AAPL' AND fiscal_year = 2009 AND fiscal_period = 'F
 
 | table | what |
 |---|---|
-| `filings` | one row per tracked filing (key: accession number): form, dates, URL, fiscal label and how it was derived |
+| `filings` | one row per tracked filing (key: accession number): form, dates, URL, fiscal label and how it was derived, co-registrant CIKs, corrections and notes |
 | `reports` (view) | the original report per (ticker, family, year, period) plus its amendments and co-filed originals |
 | `companies`, `company_ciks` | the ticker list and every CIK that belongs to a company, with validity and evidence |
 | `filers` | what EDGAR says about each CIK (name, fiscal year end, filer category, former names) |
@@ -56,17 +56,21 @@ FROM reports WHERE ticker = 'AAPL' AND fiscal_year = 2009 AND fiscal_period = 'F
 | `source_snapshots` | each submissions page as fetched, kept only when it changed, for diffing |
 | `ticker_cik_map` | what `company_tickers.json` said at every run |
 
-Forms tracked: annual `10-K`, `10-K405`, `10-KT`, `20-F`, `40-F`; quarterly `10-Q`, `10-QT`; their `/A` amendments;
-late-filing notices `NT 10-K`, `NT 10-Q`, `NT 20-F`. Five of the twenty companies (SAP, SHEL, BABA, NVO, TM) are
-foreign private issuers: they file a `20-F` once a year and no quarterly report at all, so they have no quarterly rows.
+Forms tracked: annual `10-K`, `10-K405`, `10-KT`, `10-KT405`, `10-KSB`, `20-F`, `40-F`; quarterly `10-Q`, `10-QT`,
+`10-QSB`; their `/A` amendments; late-filing notices `NT 10-K`, `NT 10-K405`, `NT 10-Q`, `NT 20-F`. Five of the twenty
+companies (SAP, SHEL, BABA, NVO, TM) are foreign private issuers: they file a `20-F` once a year and no quarterly
+report at all, so they have no quarterly rows.
 
 ## Fiscal labels
 
-`fiscal_year` is the calendar year in which the fiscal year ends; quarters count from the previous year end. Apple's
-year ended 2009-09-26 is `2009 FY`; its quarter ended 2025-12-27 is `2026 Q1`; Walmart's quarter ended 2026-04-30 is
-`2027 Q1`. Some issuers name years by their start (GameStop's year ended 2025-02-01 is "fiscal 2024" to GameStop); the
-SEC's own label is stored next to ours in `sec_fiscal_year` / `sec_fiscal_period` for the filings that have XBRL
-(2009 onwards). Decision D3 in `docs/decisions.md` explains the choice and the alternatives.
+`fiscal_year` is the calendar year of the nominal fiscal year end nearest the period end; quarters count from the
+previous nominal year end. Apple's year ended 2009-09-26 is `2009 FY`; its quarter ended 2025-12-27 is `2026 Q1`;
+Walmart's quarter ended 2026-04-30 is `2027 Q1`; a 52/53-week year ending 2027-01-02 against a 31 December year end
+is `2026 FY`. Some issuers name years by their start (GameStop's year ended 2025-02-01 is "fiscal 2024" to GameStop):
+they are listed in `overrides.toml` with evidence, and the SEC's own label is stored next to ours in
+`sec_fiscal_year` / `sec_fiscal_period` for the filings that have XBRL (2009 onwards). When EDGAR's "period of
+report" is wrong for a filing, `overrides.toml` carries the corrected date with the evidence read, and the label
+follows it (`label_method = 'corrected'`). Decision D3 in `docs/decisions.md` explains the choice and the alternatives.
 
 ## Scheduling
 

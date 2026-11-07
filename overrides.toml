@@ -39,3 +39,52 @@ note = "AT&T 10-Q filed 2014-11-10: cover page says 'For the quarterly period en
 check = "labels_match_sec"
 key = "0000732717-21-000080"
 note = "AT&T 10-Q filed 2021-11-04: cover page says 'For the quarterly period ended September 30, 2021' (read 2026-11-07), third quarter; the SEC's XBRL label says Q2."
+
+# Issuers that name their fiscal year by the calendar year in which it STARTS. Our label is the year in which it
+# ends (decision D3); the SEC's XBRL label follows the issuer. Only the companies listed here, in this direction
+# and up to the given filing date, count as a naming convention; any other disagreement is a real one.
+[[naming_conventions]]
+ticker = "GME"
+sec_year_offset = -1
+note = "GameStop calls the year ended 2025-02-01 'fiscal 2024'; every XBRL label since 2009 is one year below ours, same period."
+evidence = "sec-filings verify-labels on 2026-11-07: 73 of 73 labelled GME filings differ by exactly one year with the same period; GameStop 10-K cover pages."
+
+[[naming_conventions]]
+ticker = "WMT"
+sec_year_offset = -1
+until = 2014-03-21
+note = "Walmart labelled fiscal years by their start year up to the 10-K filed 2014-03-21 (period 2014-01-31 labelled 2013); from the next filing on its labels agree with ours."
+evidence = "sec-filings verify-labels on 2026-11-07: the 20 WMT disagreements are all filings up to 2014-03-21; none after."
+
+[[naming_conventions]]
+ticker = "TM"
+sec_year_offset = -1
+until = 2017-06-23
+note = "Toyota labelled 20-Fs by the start year up to the 20-F filed 2017-06-23 (period 2017-03-31 labelled 2016); later 20-Fs agree with ours."
+evidence = "sec-filings verify-labels on 2026-11-07: the 8 TM disagreements are 20-Fs filed 2010 to 2017-06-23; none after."
+
+# Notes on individual filings that a reader of the reports view should see.
+[[filing_notes]]
+accession = "0001104659-21-036537"
+note = "Filed by Churchill Capital Corp IV, the SPAC shell, before its July 2021 merger with Lucid; this is the shell's annual report, not Lucid's business."
+[[filing_notes]]
+accession = "0001104659-21-067004"
+note = "Amendment by Churchill Capital Corp IV restating the SPAC shell's fiscal 2020 financial statements (warrant accounting), before the Lucid merger."
+
+# Corrections of EDGAR's "period of report" for individual filings, each with the evidence read. EDGAR's value is
+# kept in report_date; the fiscal label is derived from the corrected date (label_method = 'corrected').
+[[filing_corrections]]
+accession = "0000320193-97-000021"
+report_date = 1997-03-28
+note = "Apple 10-Q/A filed 1997-10-07; EDGAR's period of report is the filing date, and the inferred label (last quarter before the filing date) pointed at Q3. The amendment adds Item 4 to the 10-Q for the quarter ended 28 March 1997, which is fiscal 1997 Q2."
+evidence = "https://www.sec.gov/Archives/edgar/data/320193/0000320193-97-000021.txt cover page: 'For the quarterly period ended March 28, 1997' and 'amends the disclosure contained in Part II of the Registrant's Quarterly Report on Form 10-Q for the period ended March 28, 1997', read 2026-11-07"
+
+[[accepted_findings]]
+check = "labels_inferred_for_amendments"
+key = "0000019617-94-000048"
+note = "Chemical Banking Corp (JPMorgan's predecessor under CIK 19617) 10-K/A filed 1994-05-09: 'amends ... exhibits ... of its Annual Report on Form 10-K for the fiscal year ended December 31, 1993' (employee plan statements). The inferred label 1993 FY is right. Read 2026-11-07 at https://www.sec.gov/Archives/edgar/data/19617/0000019617-94-000048.txt"
+
+[[accepted_findings]]
+check = "labels_inferred_for_amendments"
+key = "0000019617-95-000080"
+note = "Chemical Banking Corp 10-K/A filed 1995-06-26: 'amends ... exhibits ... of its Annual Report on Form 10-K for the fiscal year ended December 31, 1994'. The inferred label 1994 FY is right. Read 2026-11-07 at https://www.sec.gov/Archives/edgar/data/19617/0000019617-95-000080.txt"

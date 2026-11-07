@@ -10,7 +10,7 @@ def answer(conn: psycopg.Connection, ticker: str, fiscal_year: int, period: str 
         cur.execute(
             """
             SELECT ticker, family, fiscal_year, fiscal_period, form, accession_number, cik, also_filed_by_ciks, filing_date,
-                   report_date, primary_document_url, label_method, sec_fiscal_year, sec_fiscal_period, amendments,
+                   report_date, report_date_corrected, primary_document_url, label_method, note, sec_fiscal_year, sec_fiscal_period, amendments,
                    amendment_accessions, other_originals, not_seen_since
             FROM reports WHERE ticker = %s AND fiscal_year = %s AND fiscal_period = %s
             """,
@@ -46,6 +46,15 @@ def summary(conn: psycopg.Connection) -> list[dict]:
 def latest_run(conn: psycopg.Connection) -> dict | None:
     with conn.cursor() as cur:
         cur.execute("SELECT * FROM runs ORDER BY id DESC LIMIT 1")
+        return cur.fetchone()
+
+
+def previous_ok_run(conn: psycopg.Connection, before_run_id: int | None = None) -> dict | None:
+    with conn.cursor() as cur:
+        if before_run_id is None:
+            cur.execute("SELECT * FROM runs WHERE status = 'ok' ORDER BY id DESC LIMIT 1")
+        else:
+            cur.execute("SELECT * FROM runs WHERE status = 'ok' AND id < %s ORDER BY id DESC LIMIT 1", (before_run_id,))
         return cur.fetchone()
 
 

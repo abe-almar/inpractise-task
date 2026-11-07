@@ -19,7 +19,7 @@ COMPANYFACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.jso
 ARCHIVE_DOC_URL = "https://www.sec.gov/Archives/edgar/data/{cik}/{accession_nodash}/{document}"
 FILING_INDEX_URL = "https://www.sec.gov/Archives/edgar/data/{cik}/{accession_nodash}/{accession}-index.htm"
 
-RETRY_STATUSES = {429, 500, 502, 503, 504}
+RETRY_STATUSES = {429, 408} | set(range(500, 600))  # rate limiting, timeouts, any server-side error
 
 
 class EdgarError(RuntimeError):

@@ -9,3 +9,4 @@ docs/agent-runs/.usage-*.json
 *.egg-info/
 dist/
 build/
+docs/evidence/tools/export_blocklist.txt

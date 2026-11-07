@@ -39,16 +39,16 @@ def sec_labels_from_companyfacts(data: dict) -> dict[str, tuple[int | None, str 
     return out
 
 
-def verify_labels(conn: psycopg.Connection, client: EdgarClient) -> dict:
-    pairs = loader.active_ciks(conn)
-    stored = 0
-    skipped = []
-    for ticker, cik in pairs:
+def refresh_sec_labels(conn: psycopg.Connection, client: EdgarClient, ciks: list[int]) -> dict[int, int]:
+    """Load (or reload) the SEC's labels for the given CIKs. Returns labels stored per CIK; a CIK without
+    companyfacts (no XBRL filings) stores nothing and is reported as 0."""
+    stored: dict[int, int] = {}
+    for cik in ciks:
         try:
             data, _ = client.companyfacts(cik)
         except EdgarNotFound:
-            skipped.append(f"{ticker}/{cik}")
-            log.info("%s CIK %s: no companyfacts (no XBRL filings)", ticker, cik)
+            stored[cik] = 0
+            log.info("CIK %s: no companyfacts (no XBRL filings)", cik)
             continue
         labels = sec_labels_from_companyfacts(data)
         with conn.cursor() as cur:
@@ -63,8 +63,16 @@ def verify_labels(conn: psycopg.Connection, client: EdgarClient) -> dict:
                     (accn, fy, fp, form),
                 )
         conn.commit()
-        stored += len(labels)
-        log.info("%s CIK %s: %d SEC labels", ticker, cik, len(labels))
+        stored[cik] = len(labels)
+        log.info("CIK %s: %d SEC labels", cik, len(labels))
+    return stored
+
+
+def verify_labels(conn: psycopg.Connection, client: EdgarClient) -> dict:
+    """Refresh every active filer's SEC labels and count the raw disagreements (conventions and accepted findings
+    included; the morning check is the place that tells them apart)."""
+    pairs = loader.active_ciks(conn)
+    stored = refresh_sec_labels(conn, client, [cik for _, cik in pairs])
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -75,4 +83,5 @@ def verify_labels(conn: psycopg.Connection, client: EdgarClient) -> dict:
             """
         )
         row = cur.fetchone()
-    return {"labels_stored": stored, "compared": row["compared"], "disagree": row["disagree"], "skipped": skipped}
+    return {"labels_stored": sum(stored.values()), "compared": row["compared"], "raw_disagreements": row["disagree"],
+            "filers_without_xbrl": [f"{t}/{c}" for t, c in pairs if stored.get(c) == 0]}

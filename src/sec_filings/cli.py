@@ -21,9 +21,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-v", "--verbose", action="store_true", help="debug logging")
     sub = p.add_subparsers(dest="command", required=True)
     sub.add_parser("run", help="daily run: fetch the recent filings of every company, load, label, check (exit 1 if a hard check fails)")
-    sub.add_parser("backfill", help="like run, but reads every older submissions page too (first run, or after adding a company)")
-    sub.add_parser("check", help="re-read the latest run's checks without fetching anything; exit 1 if it is not a clean run from today")
-    sub.add_parser("verify-labels", help="load the SEC's own fiscal labels from the XBRL companyfacts API and compare")
+    b = sub.add_parser("backfill", help="like run, but also reads the older submissions pages of every filer whose history has not been read yet (first run, or after adding a company)")
+    b.add_argument("--full", action="store_true", help="re-read every older page of every filer, even those already read")
+    sub.add_parser("check", help="re-read the latest run's stored checks without fetching anything; exit 1 if it is not a clean run from today")
+    sub.add_parser("verify-labels", help="load the SEC's own fiscal labels from the XBRL companyfacts API for every filer, then evaluate the labels_match_sec check (exit 1 on a real disagreement)")
     r = sub.add_parser("report", help="what do we have for a company's report, e.g. report AAPL 2009 FY")
     r.add_argument("ticker")
     r.add_argument("fiscal_year", type=int)
@@ -42,7 +43,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"configuration error: {exc}", file=sys.stderr)
         return 2
     if args.command in ("run", "backfill"):
-        result = daily_run(settings, mode="daily" if args.command == "run" else "backfill")
+        result = daily_run(settings, mode="daily" if args.command == "run" else "backfill", full=getattr(args, "full", False))
         print(f"run {result.run_id} ({result.mode}): status={result.status} filers={result.ciks_fetched}/{result.ciks_expected} "
               f"filings seen={result.filings_seen} new={result.filings_inserted} relabelled={result.relabelled} "
               f"requests={result.requests} errors={result.http_errors} duration={result.duration_sec:.0f}s")
@@ -57,12 +58,19 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "check":
             return cmd_check(conn)
         if args.command == "verify-labels":
+            from sec_filings.loader import Overrides
             from sec_filings.verify import verify_labels
             db.migrate(conn)
             client = EdgarClient(settings.user_agent, settings.rate_limit_per_sec, settings.http_timeout, settings.max_retries)
             out = verify_labels(conn, client)
             print(json.dumps(out))
-            return 0 if out["disagree"] == 0 else 1
+            overrides = Overrides.load(settings.overrides_file)
+            check = checks_mod.apply_accepted(
+                checks_mod.check_labels_match_sec(conn, overrides.naming_conventions, datetime.now(timezone.utc).date()),
+                overrides.accepted_findings,
+            )
+            print(checks_mod.format_results([check]))
+            return 0 if check.passed else 1
         if args.command == "report":
             rows = report.answer(conn, args.ticker, args.fiscal_year, args.period)
             if not rows:

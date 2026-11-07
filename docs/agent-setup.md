@@ -7,8 +7,8 @@ The brief asks to use agents as one would at work and to show what they got wron
 | role | tool | model | what it did |
 |---|---|---|---|
 | lead / implementer | Claude Code (Claude Fable 5.1) in this repository | claude-fable-5-1 | read the brief, probed EDGAR, made and logged the decisions, wrote the job, ran it, wrote these documents; delegated the test suite to a sub-agent with a precise brief |
-| independent auditor | Hermes agent, a dedicated profile `takehome` | gpt-6.1-sol (OpenAI Codex), reasoning max, with its own sub-agents at xhigh | recomputed results by a different route and played the "fresh agent" that must add companies from the handover kit alone |
-| adversarial reviewer | Hermes agent, a dedicated profile `takehomereviewer` | gpt-6.1-sol, report-only | reviewed each deliverable against the brief; first line of every report is a verdict; findings were fixed and the delta re-reviewed |
+| independent auditor | Hermes agent, a dedicated profile `takehome` | gpt-6.1-sol (OpenAI Codex), reasoning max, with its own sub-agents at xhigh | recomputed 183 filings of four companies through EDGAR's Atom feeds and confirmed five periods on index pages (verdict MATCH); separately, with no persona or memory injected, played the "fresh agent" that must add five companies from the handover kit alone: it loaded them with their predecessor CIKs, stopped on a Disney filing the kit could not correct, and proposed nine kit changes, all adopted |
+| adversarial reviewer | Hermes agent, a dedicated profile `takehomereviewer` | gpt-6.1-sol, report-only | reviewed the job, the morning check and the kit against the brief (pass 1: FAIL, nine major findings, seven fixed in code, two stated as limitations), then the delta; first line of every report is a verdict |
 
 The two Hermes profiles were created for this task only (cloned from generic coder/reviewer profiles, then given a
 task-specific persona and a clean memory). Their personas are reproduced in `docs/agent-personas.md`; their reports

@@ -1,11 +1,12 @@
 """Which fiscal year and period a report covers.
 
-Convention (decision D3 in docs/decisions.md): the fiscal year is the calendar year in which the fiscal year ENDS.
-Apple's year ended 2009-09-26 is fiscal 2009; Walmart's year ended 2026-01-31 is fiscal 2026. Quarters are counted
-from the previous fiscal year end: Apple's quarter ended 2025-12-27 is fiscal 2026 Q1. The rule uses only the period of
-report and the company's fiscal year end (MMDD), so it works for every filing since 1994. Companies that name their
-years differently (GameStop calls the year ended 2025-02-01 "fiscal 2024") get the SEC's own label stored next to
-ours by `sec-filings verify-labels`; the rule itself is never bent per company.
+Convention (decision D3 in docs/decisions.md): the fiscal year is the calendar year of the NOMINAL fiscal year end
+nearest the period end. Apple's year ended 2009-09-26 is fiscal 2009; Walmart's year ended 2026-01-31 is fiscal
+2026; a 52/53-week year ending 2027-01-02 against a nominal 31 December is fiscal 2026, as the company itself names
+it. Quarters are counted from the previous nominal year end: Apple's quarter ended 2025-12-27 is fiscal 2026 Q1. The
+rule uses only the period of report and the company's fiscal year end (MMDD), so it works for every filing since
+1994. Companies that name their years differently (GameStop calls the year ended 2025-02-01 "fiscal 2024") get the
+SEC's own label stored next to ours by `sec-filings verify-labels`; the rule itself is never bent per company.
 """
 
 from __future__ import annotations
@@ -87,7 +88,7 @@ def add_months(d: date, months: int) -> date:
 class Label:
     fiscal_year: int | None
     fiscal_period: str | None  # 'FY', 'Q1', 'Q2', 'Q3'; 'Q4' only when something is off
-    method: str  # 'rule', 'rule_filing_date', 'rule_far', 'no_fye', 'no_report_date', 'not_a_report'
+    method: str  # 'rule', 'rule_filing_date', 'rule_far', 'no_fye', 'no_report_date', 'not_a_report'; the loader also writes 'corrected'
     note: str = ""
 
     @property
@@ -99,10 +100,13 @@ LABELLED_METHODS = ("rule", "rule_filing_date", "rule_far")
 
 
 def valid_mmdd(mmdd: str | None) -> bool:
+    """A real month and day; 0229 is allowed (clipped to the 28th in common years), 0231 is not."""
     if not mmdd or len(mmdd) != 4 or not mmdd.isdigit():
         return False
     month, day = int(mmdd[:2]), int(mmdd[2:])
-    return 1 <= month <= 12 and 1 <= day <= 31
+    if not 1 <= month <= 12:
+        return False
+    return 1 <= day <= (29 if month == 2 else calendar.monthrange(2001, month)[1])
 
 
 def label(form: str, report_date: date | None, fye_mmdd: str | None, filing_date: date | None = None) -> Label:
