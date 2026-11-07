@@ -208,8 +208,10 @@ is not among the checks.
   route, spot-check filings against EDGAR pages, and later play the "fresh agent" that must add companies from the
   handover kit alone.
 - Hermes profile `takehomereviewer` (gpt-6.1-sol, report-only) runs adversarial review passes on every deliverable;
-  reports are committed under `docs/review-evidence/` with the findings and how each was closed. Pass 1 (2026-11-07,
-  verdict FAIL, nine major findings) drove migrations 003 and 004 and the current check list.
+  reports are committed under `docs/review-evidence/` with the findings and how each was closed. Five passes on
+  2026-11-07: pass 1 (full, FAIL, nine major findings) drove migrations 003 and 004 and the check list; passes 2 to 4
+  (deltas, FAIL each, one or two real defects introduced by the previous fixes) drove migrations 005 to 007 and the
+  per-filer coverage watermark; pass 5 PASS.
 - The fresh-agent test (2026-11-07, no persona, five new companies in an isolated worktree and database) found the
   Google and Disney predecessor CIKs on its own, stopped on a Disney filing with a wrong EDGAR period because the kit
   had no per-filing correction, and proposed nine kit changes; all are in the kit or the code now

@@ -25,20 +25,16 @@ Lucid's SPAC and Carvana's first 10-K "non-accelerated" (90 days). One was late:
 **A keyword classifier called Tesla's Part III amendments "restatements"** (clawback boilerplate). Replaced by
 quoting each explanatory note: of 33 amendments in ten years, one restated the financial statements.
 
-**The adversarial review (Hermes, verdict FAIL, nine major findings) was mostly right.** Fixed: the disappearance
-alarm fired once and went quiet, and a crash between load and checks lost it; an empty EDGAR page counted as fetched;
-"any one-year difference is a naming convention" would have excused an off-by-one bug in my own rule; a second
-registrant's page overwrote the first's metadata; acceptance ran on a truncated list; the 20-F deadline was 120 days,
-not four months; two documented features (dated year ends, a recovery for tickers missing from EDGAR's file) did not
-exist. Left as stated limitations: federal holidays and the thirteen-week approximation of 52/53-week quarter ends.
-
-**The delta review then caught two things my fixes had introduced.** A run that completed but failed its checks
-still counted as the "last good run", so the new outage alarm could clear itself without a backfill; and the new
-daily refresh of the SEC's labels only ran for filers with brand-new filings, so a failed or lagging refresh was
-never retried. Both are persistent state now; the third pass then showed my first fix made recovery impossible (the
-re-read cleared the gap and the old baseline re-set it), so coverage became a per-filer watermark, and the whole
-outage path was exercised on the live database (`docs/evidence/outage-recovery-2026-11-07.log`). Unlabelled XBRL
-filings are retried every run and become findings after three weeks.
+**The adversarial reviewer (Hermes) failed the work four times before passing it.** Pass 1 (nine major findings),
+mostly right and fixed: the disappearance alarm fired once and went quiet, and a crash between load and checks lost
+it; an empty EDGAR page counted as fetched; "any one-year difference is a naming convention" would have excused an
+off-by-one bug in my own rule; a second registrant's page overwrote the first's metadata; acceptance ran on a
+truncated list; the 20-F deadline was 120 days, not four months; two documented features did not exist. Passes 2
+to 4 each caught a defect in the previous fix: a run-level "last good run" baseline that first faded the outage
+alarm, then made recovery impossible, then a watermark initialisation that cleared an inherited gap, then a refresh
+queue that could starve a filer. Coverage is now a per-filer watermark, exercised live on an outage
+(`docs/evidence/outage-recovery-2026-11-07.log`). Left as stated limitations: federal holidays and the thirteen-week
+approximation of 52/53-week quarter ends. Reports and closures: `docs/review-evidence/`.
 
 **The fresh-agent test found what the kit could not express.** With no persona, it added five companies, found the
 Google and Disney predecessor CIKs on its own (Disney has two), and stopped, correctly, on a Disney 10-Q whose EDGAR
