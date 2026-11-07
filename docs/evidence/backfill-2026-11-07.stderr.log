@@ -1,0 +1,22 @@
+2026-11-07 17:30:53,405 INFO sec_filings.db: applying migration 001_init.sql
+2026-11-07 17:30:54,190 INFO sec_filings.flow: AAPL CIK 320193 Apple Inc.: 2 pages, 137 tracked filings, 137 new, 0 seen again
+2026-11-07 17:30:54,752 INFO sec_filings.flow: AMC CIK 1411579 AMC ENTERTAINMENT HOLDINGS, INC.: 2 pages, 55 tracked filings, 55 new, 0 seen again
+2026-11-07 17:30:54,938 INFO sec_filings.flow: BABA CIK 1577552 Alibaba Group Holding Ltd: 1 pages, 13 tracked filings, 13 new, 0 seen again
+2026-11-07 17:30:55,458 INFO sec_filings.flow: CVNA CIK 1690820 CARVANA CO.: 2 pages, 39 tracked filings, 39 new, 0 seen again
+2026-11-07 17:30:56,432 INFO sec_filings.flow: F CIK 37996 FORD MOTOR CO: 3 pages, 142 tracked filings, 142 new, 0 seen again
+2026-11-07 17:30:57,364 INFO sec_filings.flow: GE CIK 40545 GENERAL ELECTRIC CO: 3 pages, 145 tracked filings, 145 new, 0 seen again
+2026-11-07 17:30:57,884 INFO sec_filings.flow: GME CIK 1326380 GameStop Corp.: 2 pages, 90 tracked filings, 90 new, 0 seen again
+2026-11-07 17:31:17,789 INFO sec_filings.flow: JPM CIK 19617 JPMORGAN CHASE & CO: 72 pages, 144 tracked filings, 144 new, 0 seen again
+2026-11-07 17:31:18,518 INFO sec_filings.flow: KO CIK 21344 COCA COLA CO: 3 pages, 137 tracked filings, 137 new, 0 seen again
+2026-11-07 17:31:18,705 INFO sec_filings.flow: LCID CIK 1811210 Lucid Group, Inc.: 1 pages, 27 tracked filings, 27 new, 0 seen again
+2026-11-07 17:31:19,551 INFO sec_filings.flow: MSFT CIK 789019 MICROSOFT CORP: 3 pages, 138 tracked filings, 138 new, 0 seen again
+2026-11-07 17:31:20,207 INFO sec_filings.flow: NVO CIK 353278 NOVO NORDISK A S: 2 pages, 29 tracked filings, 29 new, 0 seen again
+2026-11-07 17:31:20,778 INFO sec_filings.flow: PLUG CIK 1093691 PLUG POWER INC: 2 pages, 120 tracked filings, 120 new, 0 seen again
+2026-11-07 17:31:21,004 INFO sec_filings.flow: SAP CIK 1000184 SAP SE: 1 pages, 30 tracked filings, 30 new, 0 seen again
+2026-11-07 17:31:21,430 INFO sec_filings.flow: SHEL CIK 1306965 Shell plc: 2 pages, 23 tracked filings, 23 new, 0 seen again
+2026-11-07 17:31:23,155 INFO sec_filings.flow: T CIK 732717 AT&T INC.: 5 pages, 148 tracked filings, 148 new, 0 seen again
+2026-11-07 17:31:23,692 INFO sec_filings.flow: TM CIK 1094517 TOYOTA MOTOR CORP/: 2 pages, 43 tracked filings, 43 new, 0 seen again
+2026-11-07 17:31:24,237 INFO sec_filings.flow: TSLA CIK 1318605 Tesla, Inc.: 2 pages, 73 tracked filings, 73 new, 0 seen again
+2026-11-07 17:31:25,000 INFO sec_filings.flow: WMT CIK 104169 Walmart Inc.: 3 pages, 132 tracked filings, 132 new, 0 seen again
+2026-11-07 17:31:25,030 INFO sec_filings.flow: XOM CIK 2115436 ExxonMobil Holdings Corp: 1 pages, 2 tracked filings, 2 new, 0 seen again
+2026-11-07 17:31:26,007 INFO sec_filings.flow: XOM CIK 34088 EXXON MOBIL CORP: 3 pages, 134 tracked filings, 133 new, 1 seen again

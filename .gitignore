@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.pytest_cache/
+.ruff_cache/
+docs/review-evidence/.usage-*.json
+docs/agent-runs/.usage-*.json
+*.egg-info/
+dist/
+build/

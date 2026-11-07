@@ -1,0 +1,19 @@
+# Facts about the companies that EDGAR's ticker file and submissions JSON do not carry, each with its evidence.
+# The job reads this file on every run. Add an entry here when the morning check reports a ticker whose CIK
+# changed, or a company whose fiscal year end is null. See docs/decisions.md (D2, D3).
+
+# Predecessor or sibling registrants whose filings belong to the company's history.
+[[extra_ciks]]
+ticker = "XOM"
+cik = 34088
+name = "Exxon Mobil Corp"
+valid_to = "2026-07-01"
+note = "Exxon reorganised into a holding company on 2026-07-01 (form 8-K12B filed by the new registrant). The ticker now maps to ExxonMobil Holdings Corp (CIK 2115436), which has only 2026 filings; every earlier 10-K and 10-Q sits under this CIK. The Q2 2026 10-Q is one combined filing listed under both CIKs."
+evidence = "https://data.sec.gov/submissions/CIK0000034088.json (name EXXON MOBIL CORP, tickers [], last 10-Q filed 2026-08-03) and https://data.sec.gov/submissions/CIK0002115436.json (8-K12B on 2026-07-01), read 2026-11-07"
+
+# Fiscal year end (MMDD) when the submissions JSON has none.
+[[fiscal_year_ends]]
+ticker = "BABA"
+mmdd = "0331"
+note = "fiscalYearEnd is null in the submissions JSON; every 20-F the company filed has a period of report of 31 March."
+evidence = "https://data.sec.gov/submissions/CIK0001577552.json reportDate of forms 20-F, read 2026-11-07"

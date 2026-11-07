@@ -1,0 +1,40 @@
+run 1 (backfill): status=ok filers=21/21 filings seen=1801 new=1800 relabelled=1800 requests=118 errors=0 duration=33s
+[ok  ] run_complete: fetched 21 of 21 filer pages
+[ok  ] http_health: 0 EDGAR errors, 0 retries, 33s of a 600s budget
+[ok  ] tickers_resolved: every ticker is in company_tickers.json
+[ok  ] cik_changes_acknowledged: no ticker changed CIK
+[ok  ] fiscal_year_end_known: every filer has a fiscal year end
+[ok  ] no_filings_lost: no filing disappeared from the feed (0 older disappearances on record)
+[ok  ] labels_complete: every report has a fiscal label
+[FAIL] labels_unique: 4 (company, year, period) with more than one original report; look at each
+        - {'key': 'GE/40545/annual/2015/FY', 'accessions': ['0000040545-15-000030', '0000040545-16-000145'], 'forms': ['10-K', '10-K']}
+        - {'key': 'NVO/353278/annual/2012/FY', 'accessions': ['0001208646-12-000031', '0001208646-13-000047'], 'forms': ['20-F', '20-F']}
+        - {'key': 'SAP/1000184/annual/2004/FY', 'accessions': ['0001156973-04-000314', '0001156973-05-000351'], 'forms': ['20-F', '20-F']}
+        - {'key': 'T/732717/annual/2010/FY', 'accessions': ['0000732717-10-000013', '0000732717-11-000014'], 'forms': ['10-K', '10-K']}
+[WARN] labels_far_from_calendar: 21 filing(s) whose period end is off the fiscal calendar; labels are best effort
+        - {'key': '0000320193-97-000021', 'ticker': 'AAPL', 'form': '10-Q/A', 'report_date': '1997-10-07', 'label': '1998 Q1', 'note': 'period end 1997-10-07 is 80 days from the nominal quarter end 1997-12-26'}
+        - {'key': '0000040554-14-000061', 'ticker': 'GE', 'form': '10-Q', 'report_date': '2014-05-09', 'label': '2014 Q1', 'note': 'period end 2014-05-09 is 39 days from the nominal quarter end 2014-03-31'}
+        - {'key': '0000040545-14-000034', 'ticker': 'GE', 'form': '10-Q', 'report_date': '2014-07-31', 'label': '2014 Q2', 'note': 'period end 2014-07-31 is 31 days from the nominal quarter end 2014-06-30'}
+        - {'key': '0000040545-14-000049', 'ticker': 'GE', 'form': '10-Q', 'report_date': '2014-11-03', 'label': '2014 Q3', 'note': 'period end 2014-11-03 is 34 days from the nominal quarter end 2014-09-30'}
+        - {'key': '0000040545-15-000030', 'ticker': 'GE', 'form': '10-K', 'report_date': '2015-02-27', 'label': '2015 FY', 'note': 'period end 2015-02-27 is 58 days from the nominal year end (MMDD 1231); transition period or a changed fiscal year end'}
+        - {'key': '0000019617-94-000048', 'ticker': 'JPM', 'form': '10-K/A', 'report_date': '1994-05-06', 'label': '1994 FY', 'note': 'period end 1994-05-06 is 126 days from the nominal year end (MMDD 1231); transition period or a changed fiscal year end'}
+        - {'key': '0000019617-95-000080', 'ticker': 'JPM', 'form': '10-K/A', 'report_date': '1995-06-21', 'label': '1995 FY', 'note': 'period end 1995-06-21 is 172 days from the nominal year end (MMDD 1231); transition period or a changed fiscal year end'}
+        - {'key': '0001208646-12-000031', 'ticker': 'NVO', 'form': '20-F', 'report_date': '2012-02-06', 'label': '2012 FY', 'note': 'period end 2012-02-06 is 37 days from the nominal year end (MMDD 1231); transition period or a changed fiscal year end'}
+        - {'key': '0001171843-15-000625', 'ticker': 'NVO', 'form': '20-F', 'report_date': '2014-02-10', 'label': '2014 FY', 'note': 'period end 2014-02-10 is 41 days from the nominal year end (MMDD 1231); transition period or a changed fiscal year end'}
+        - {'key': '0001156973-04-000314', 'ticker': 'SAP', 'form': '20-F', 'report_date': '2004-03-23', 'label': '2004 FY', 'note': 'period end 2004-03-23 is 83 days from the nominal year end (MMDD 1231); transition period or a changed fiscal year end'}
+        ... 11 more
+[ok  ] overdue_reports: no company is past its filing deadline
+[info] labels_match_sec: no SEC labels loaded yet (run sec-filings verify-labels)
+[info] news: 1800 new filing(s) this run, of which 133 amendment(s) or late-filing notice(s)
+        - {'key': '0000320193-97-000021', 'ticker': 'AAPL', 'form': '10-Q/A', 'filed': '1997-10-07', 'period': '1997-10-07', 'label': '1998 Q1'}
+        - {'key': '0001047469-98-001822', 'ticker': 'AAPL', 'form': '10-K/A', 'filed': '1998-01-23', 'period': '1997-09-26', 'label': '1997 FY'}
+        - {'key': '0001104659-06-053743', 'ticker': 'AAPL', 'form': 'NT 10-Q', 'filed': '2006-08-11', 'period': '2006-07-01', 'label': '2006 Q3'}
+        - {'key': '0001104659-06-081617', 'ticker': 'AAPL', 'form': 'NT 10-K', 'filed': '2006-12-15', 'period': '2006-09-30', 'label': '2006 FY'}
+        - {'key': '0001193125-09-087629', 'ticker': 'AAPL', 'form': '10-Q/A', 'filed': '2009-04-27', 'period': '2009-03-28', 'label': '2009 Q2'}
+        - {'key': '0001193125-10-012091', 'ticker': 'AAPL', 'form': '10-K/A', 'filed': '2010-01-25', 'period': '2009-09-26', 'label': '2009 FY'}
+        - {'key': '0001104659-23-053117', 'ticker': 'AMC', 'form': '10-K/A', 'filed': '2023-04-28', 'period': '2022-12-31', 'label': '2022 FY'}
+        - {'key': '0001104659-25-042636', 'ticker': 'AMC', 'form': '10-K/A', 'filed': '2025-04-30', 'period': '2024-12-31', 'label': '2024 FY'}
+        - {'key': '0001104659-26-053024', 'ticker': 'AMC', 'form': '10-K/A', 'filed': '2026-04-30', 'period': '2025-12-31', 'label': '2025 FY'}
+        - {'key': '0001193125-24-044480', 'ticker': 'BABA', 'form': '20-F/A', 'filed': '2024-02-23', 'period': '2023-03-31', 'label': '2023 FY'}
+        ... 123 more
+RESULT: ATTENTION NEEDED
