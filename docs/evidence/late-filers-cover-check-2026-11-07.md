@@ -10,22 +10,22 @@ value) read. Script output kept verbatim below; "☒" / "x" is the checked box.
 |---|---|---|---|---|---|---|
 | AMC | 2016 | 2017-03-10 | 69 | Accelerated filer ☒ | 75 days (2017-03-16) | no |
 | AMC | 2020 | 2021-03-12 | 71 | Accelerated filer ☒ | 75 days (2021-03-16) | no |
-| CVNA | 2017 | 2018-03-06 | 65 | see note 1 | 90 days (first annual report of a new registrant) | no |
+| CVNA | 2017 | 2018-03-06 | 65 | Non-accelerated filer ý, Emerging growth company ý (read by hand, note 1) | 90 days (2018-04-02, 31 March is a Saturday) | no |
 | LCID | 2020 | 2021-03-16 | 75 | Non-accelerated filer x, Emerging growth company x | 90 days (2021-03-31) | no |
 | PLUG | 2016 | 2017-03-10 | 69 | Accelerated filer ☒ | 75 days (2017-03-16) | no |
 | PLUG | 2017 | 2018-03-12 | 71 | Accelerated filer ☒ | 75 days (2018-03-16) | no |
 | PLUG | 2018 | 2019-03-13 | 72 | Accelerated filer ☒ | 75 days (2019-03-18, 16th is a Saturday) | no |
-| PLUG | 2019 | 2020-03-10 | 70 | see note 2 | 75 days (2020-03-16) | no |
+| PLUG | 2019 | 2020-03-10 | 70 | Accelerated Filer ☒ (read by hand, note 2) | 75 days (2020-03-16) | no |
 | PLUG | 2020 | 2021-05-14 | 134 | Large accelerated filer ☒, NT 10-K filed 2021-03-02 | 60 + 15 days (2021-03-16) | **yes, 59 days** |
 
 Other annual reports in the window were filed inside today's deadline for their class, so they are inside any
 historical deadline as well (a filer's deadline never gets shorter than 60 days; a 20-F's is 120 days and the longest
 20-F lag in the window is BABA's 118 days).
 
-Notes: (1) the 2018 cover page uses a layout the script did not parse; Carvana listed in April 2017 and its first
-10-K as a new registrant had 90 days. (2) The script found the "Large accelerated filer" box unchecked and did not
-match the "Accelerated filer" line; the deadline above assumes accelerated. Both rows would need a human read of the
-cover page to be stated with full confidence; neither changes the answer (65 and 70 days are inside 75 and 90).
+Notes: (1) the 2018 cover page uses "ý" for a checked box, which the script's pattern missed; read directly from the
+saved page: "Large accelerated filer q Accelerated filer q Non-accelerated filer ý ... Emerging growth company ý".
+(2) The cover writes "Accelerated Filer" with a capital F, which the case-sensitive pattern missed; read directly:
+"Large accelerated filer ☐ Accelerated Filer ☒ Non-accelerated filer ☐".
 
 Raw script output (ticker, fiscal year, filing date, inline-XBRL category, checkboxes found):
 
