@@ -150,7 +150,7 @@ you accepted and every correction you made is in `overrides.toml` with what you 
 ## 9. Layout
 
 ```
-src/sec_filings/   settings, edgar (client), fiscal (rule), db (migrations), loader, checks, flow, verify, report, cli
+src/sec_filings/   settings, edgar (client), fiscal (rule), db (schema), loader (EDGAR to table), checks, flow, verify, report, cli
 src/sec_filings/sql/   001_schema.sql, the whole schema with comments, applied once (a later change is a new numbered file)
 tests/             unit tests, fixtures from real EDGAR pages, a DB replay test
 docs/              decisions, morning-check, what-i-didnt-trust, analyst-question, agent-setup, evidence/, review-evidence/, agent-runs/
