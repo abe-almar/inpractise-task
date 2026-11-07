@@ -526,14 +526,6 @@ def test_upsert_keeps_the_first_registrants_metadata_and_never_erases_with_null(
     assert conn.execute("SELECT count(*) AS n FROM filings").fetchone()["n"] == 1
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="loader.parse_page always derives primary_document_url (src/sec_filings/loader.py, document_url(cik, accession, "
-    "None) gives the index URL when primaryDocument is blank), so the COALESCE in UPSERT_SQL on primary_document_url "
-    "never sees a NULL: a later page of the owning registrant with a blank primaryDocument keeps primary_document "
-    "('a.htm', COALESCE) but replaces the URL with the -index.htm page, and the two columns no longer describe the "
-    "same document",
-)
 def test_blank_primary_document_on_a_later_page_keeps_the_document_url(schema):
     _, conn = schema
     run_id = conn.execute("INSERT INTO runs (mode) VALUES ('daily') RETURNING id").fetchone()["id"]
