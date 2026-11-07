@@ -5,7 +5,7 @@ and reviewing. Where they (and I, reading them) were wrong, how it came out, and
 
 **Exxon's two CIKs.** My probe note said both had filed a Q2 2026 10-Q. The first backfill printed one filing as
 "seen again" for the old CIK: the same accession number sits on both pages. Checked against the two submissions
-JSON files: one combined filing by two registrants. It became an `also_filed_by_ciks` column, not a second row.
+JSON files: one combined filing by two registrants. It became an `also_filed_by_ciks` column on the filing, not a second row.
 
 **Four companies with two "original" annual reports for one year.** The `labels_unique` check failed on the first
 backfill. Cause: for 20 filings, mostly 1994-2015, EDGAR's "period of report" is the filing date itself; GE's 10-K

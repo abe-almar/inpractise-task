@@ -35,8 +35,7 @@ TODAY = date(2026, 11, 7)          # the day the fixtures were fetched; fixed so
 AAPL, XOM_NEW, XOM_OLD = 320193, 2115436, 34088
 SHARED_Q2_2026_10Q = "0000034088-26-000093"   # listed on both Exxon pages (same accession, period 2026-06-30)
 APPLE_1997_10QA = "0000320193-97-000021"      # EDGAR's period of report is the filing date; corrected in overrides
-MIGRATIONS = ["001_init.sql", "002_co_registrants.sql", "003_review_pass_1.sql", "004_filing_corrections.sql",
-              "005_review_pass_2.sql", "006_coverage_watermark.sql", "007_refresh_rotation.sql"]
+MIGRATIONS = ["001_schema.sql"]
 CHECK_NAMES = {
     "run_complete", "http_health", "tickers_resolved", "cik_changes_acknowledged", "fiscal_year_end_known", "history_gap",
     "sec_labels_refreshed", "no_filings_lost", "labels_complete", "labels_unique", "labels_unique_across_ciks",
@@ -524,7 +523,6 @@ def test_replay_ten_runs(schema, settings, tmp_path: Path):
     settings.overrides_file.write_text(XOM_OVERRIDE_TOML + CORRECTION_TOML, encoding="utf-8")
     assert report.previous_clean_run(conn)["id"] == r2.run_id                 # runs 3-5 completed but failed their checks
     assert report.previous_clean_run(conn, before_run_id=r2.run_id)["id"] == r1.run_id
-    assert report.previous_ok_run is report.previous_clean_run
     conn.execute("UPDATE filers SET coverage_through = %s WHERE cik = %s", (date(2026, 1, 1), XOM_NEW))
     r6, _ = run("daily", TODAY + timedelta(days=3))
     assert r6.status == "ok" and r6.relabelled == 1

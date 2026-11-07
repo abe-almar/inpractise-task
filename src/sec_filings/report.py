@@ -59,8 +59,6 @@ def previous_clean_run(conn: psycopg.Connection, before_run_id: int | None = Non
         return cur.fetchone()
 
 
-previous_ok_run = previous_clean_run  # old name
-
 
 def checks_of_run(conn: psycopg.Connection, run_id: int) -> list[dict]:
     with conn.cursor() as cur:

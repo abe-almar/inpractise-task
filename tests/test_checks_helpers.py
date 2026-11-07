@@ -16,8 +16,7 @@ from sec_filings.checks import (
 
 def facts(**kw) -> RunFacts:
     base = dict(run_id=1, ciks_expected=3, ciks_fetched=3, http_errors=0, retries=0, duration_sec=1.0, time_budget_sec=600,
-                missing_tickers=[], resolved_by_override={}, changed_tickers=[], newly_missing={}, fetch_errors={},
-                previous_ok_run_started=None, window_starts={})
+                missing_tickers=[], resolved_by_override={}, changed_tickers=[], newly_missing={}, fetch_errors={})
     base.update(kw)
     return RunFacts(**base)
 

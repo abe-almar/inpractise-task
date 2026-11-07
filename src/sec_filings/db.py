@@ -1,4 +1,5 @@
-"""Connection and schema management: numbered SQL files applied once each, tracked in schema_migrations."""
+"""Connection and schema management: the numbered SQL files under sql/ are applied once each and recorded in
+schema_migrations, so a later change is a new 002_*.sql file, never an edit of an applied one."""
 
 from __future__ import annotations
 

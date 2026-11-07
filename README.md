@@ -100,6 +100,20 @@ wrong run from a crashed one is described in `docs/morning-check.md`.
 TEST_DATABASE_URL=postgresql://sec:sec@localhost:5432/sec_filings .venv/bin/pytest -q tests/test_replay_db.py  # idempotence, needs Postgres
 ```
 
+## How the code is organised
+
+| module | does |
+|---|---|
+| `settings.py` | reads the environment (`DATABASE_URL`, user agent, rate, file paths) |
+| `edgar.py` | the HTTP client: declared user agent, spacing, retries, URLs |
+| `fiscal.py` | the pure labelling rule: form family, fiscal year and period from the period end and the year end |
+| `db.py` | connection and the one-time application of `sql/001_schema.sql` |
+| `loader.py` | EDGAR JSON to the table: companies and CIKs, one filer's pages, upsert, disappearances, coverage, labels, overrides |
+| `checks.py` | the sixteen morning checks, one function each |
+| `flow.py` | `daily_run`: the steps in order, the function a scheduler calls |
+| `verify.py` | the SEC's own XBRL labels, loaded for the cross-check |
+| `report.py`, `cli.py` | answers for humans and the `sec-filings` command |
+
 ## Where to read next
 
 - `AGENTS.md`: the handover kit for a person or an agent who has to run, extend or fix this (adding companies,
