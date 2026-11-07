@@ -117,6 +117,7 @@ def daily_run(settings: Settings, mode: str = "daily", client: EdgarClient | Non
             to_refresh = sorted(set(ciks_with_new_reports)
                                 | set(loader.ciks_awaiting_sec_labels(conn, list(window_starts), accepted_no_label)))
             for cik in to_refresh:
+                loader.mark_sec_labels_attempted(conn, [cik])
                 try:
                     verify.refresh_sec_labels(conn, client, [cik])
                     refreshed.append(cik)

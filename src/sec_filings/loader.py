@@ -443,18 +443,22 @@ def _advance_coverage(conn: psycopg.Connection, cik: int, recent_window_start: d
     """Per-filer coverage watermark. History read: coverage is complete through today and any gap is cleared.
     Otherwise the recent page extends coverage only if it overlaps the watermark (its oldest filing is not newer
     than the watermark); a page that starts after the watermark means filings may have passed unseen: the gap is
-    recorded and the watermark stays until history is read. A filer seen for the first time without history starts
-    its watermark today."""
+    recorded and the watermark stays until history is read. A filer without a watermark (first observation, or
+    upgraded from before watermarks existed) starts it today; a gap already on record is never cleared here."""
     with conn.cursor() as cur:
         cur.execute("SELECT coverage_through FROM filers WHERE cik = %s", (cik,))
         row = cur.fetchone()
         through = row["coverage_through"] if row else None
-        if history_fetched or through is None:
+        if history_fetched:
             cur.execute(
                 "UPDATE filers SET recent_window_start = %s, coverage_through = %s, coverage_gap_since = NULL, "
-                "backfill_completed_at = CASE WHEN %s THEN now() ELSE backfill_completed_at END WHERE cik = %s",
-                (recent_window_start, today, history_fetched, cik),
+                "backfill_completed_at = now() WHERE cik = %s",
+                (recent_window_start, today, cik),
             )
+        elif through is None:
+            # first observation, or a filer upgraded from before watermarks existed: coverage starts today, and a
+            # gap already on record stays until history is read (only a history read ever clears a gap)
+            cur.execute("UPDATE filers SET recent_window_start = %s, coverage_through = %s WHERE cik = %s", (recent_window_start, today, cik))
         elif recent_window_start is None or recent_window_start <= through:
             cur.execute("UPDATE filers SET recent_window_start = %s, coverage_through = %s WHERE cik = %s", (recent_window_start, today, cik))
         else:
@@ -467,18 +471,25 @@ def _advance_coverage(conn: psycopg.Connection, cik: int, recent_window_start: d
 def ciks_awaiting_sec_labels(conn: psycopg.Connection, ciks: list[int], accepted_accessions: set[str] | None = None, limit: int = 30) -> list[int]:
     """Filers with XBRL-era reports that have no SEC label yet (accepted no-label cases excluded): refreshed every
     run until the label arrives, so a failed or lagging refresh is retried without anyone noticing it. Bounded per
-    run; the rest follow on the next run."""
+    run, served oldest attempt first (never attempted first), so nobody starves behind the cap."""
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT fl.cik, count(*) AS n FROM filings fl LEFT JOIN sec_labels s USING (accession_number)
+            SELECT fl.cik, count(*) AS n, min(f.sec_labels_attempted_at) AS attempted
+            FROM filings fl LEFT JOIN sec_labels s USING (accession_number) JOIN filers f ON f.cik = fl.cik
             WHERE fl.cik = ANY(%s) AND fl.family IN ('annual', 'quarterly') AND coalesce(fl.is_xbrl, false)
               AND s.accession_number IS NULL AND NOT (fl.accession_number = ANY(%s))
-            GROUP BY fl.cik ORDER BY n DESC, fl.cik LIMIT %s
+            GROUP BY fl.cik ORDER BY attempted NULLS FIRST, n DESC, fl.cik LIMIT %s
             """,
             (ciks, list(accepted_accessions or ()), limit),
         )
         return [r["cik"] for r in cur.fetchall()]
+
+
+def mark_sec_labels_attempted(conn: psycopg.Connection, ciks: list[int]) -> None:
+    with conn.cursor() as cur:
+        cur.execute("UPDATE filers SET sec_labels_attempted_at = now() WHERE cik = ANY(%s)", (ciks,))
+    conn.commit()
 
 
 def apply_filing_corrections(conn: psycopg.Connection, corrections: dict[str, dict]) -> int:
