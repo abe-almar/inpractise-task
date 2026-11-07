@@ -17,3 +17,25 @@ ticker = "BABA"
 mmdd = "0331"
 note = "fiscalYearEnd is null in the submissions JSON; every 20-F the company filed has a period of report of 31 March."
 evidence = "https://data.sec.gov/submissions/CIK0001577552.json reportDate of forms 20-F, read 2026-11-07"
+
+# Findings of the morning check that a person has examined and accepted. They are reported as information
+# instead of failing the check. Key = the "key" the check printed. Always say what was checked.
+[[accepted_findings]]
+check = "labels_match_sec"
+key = "0000040545-15-000030"
+note = "GE 10-K filed 2015-02-27: cover page says 'For the fiscal year ended December 31, 2014' (read 2026-11-07); our label 2014 FY is right. The SEC's XBRL label says 2014 Q4: an annual report tagged with a quarterly period focus, SEC-side quirk."
+
+[[accepted_findings]]
+check = "labels_match_sec"
+key = "0000040545-20-000021"
+note = "GE 10-Q filed 2020-04-29 for the period ended 2020-03-31: first quarter of 2020 by any reading; the SEC's XBRL label says 2019 Q3, which is wrong on both counts."
+
+[[accepted_findings]]
+check = "labels_match_sec"
+key = "0000732717-14-000129"
+note = "AT&T 10-Q filed 2014-11-10: cover page says 'For the quarterly period ended September 30, 2014' (read 2026-11-07), third quarter; the SEC's XBRL label says Q2."
+
+[[accepted_findings]]
+check = "labels_match_sec"
+key = "0000732717-21-000080"
+note = "AT&T 10-Q filed 2021-11-04: cover page says 'For the quarterly period ended September 30, 2021' (read 2026-11-07), third quarter; the SEC's XBRL label says Q2."

@@ -1,6 +1,6 @@
 # Decision log
 
-Status values: `proposed` (made before implementation, open to objection), `decided`, `revised`. Each entry names the
+Status values: `proposed` (made before implementation, open to objection), `decided` (held up in the build), `revised` (changed by what the data showed; the entry says what). Each entry names the
 alternatives and the check that backs it. Dates are the day the entry was written. Evidence tables live in
 `docs/evidence/`.
 
@@ -19,7 +19,7 @@ alternatives and the check that backs it. Dates are the day the entry was writte
   miss or over-include).
 - Check: form counts per company in `docs/evidence/edgar-probe-2026-11-07.md`.
 
-## D2. A company is not a CIK (proposed 2026-11-07)
+## D2. A company is not a CIK (proposed 2026-11-07; revised the same day)
 
 - `companies` (ticker, name) and `company_ciks` (cik, valid_from, valid_to, how we know) are separate. A company may
   have several CIKs over time.
@@ -30,9 +30,13 @@ alternatives and the check that backs it. Dates are the day the entry was writte
   changes instead of switching silently; a human (or the next agent) then adds the new CIK with evidence.
 - `LCID`'s CIK belonged to a SPAC (Churchill Capital Corp IV) before the 2021 merger; its fiscal-2020 10-K is kept
   (the registrant filed it) and labelled with a note. Same treatment for any pre-merger history.
-- Check: the two Exxon submissions JSON files (both have a 10-Q for the period ended 2026-06-30).
+- Check: the two Exxon submissions JSON files.
+- Revised after the first backfill: the Q2 2026 10-Q (accession 0000034088-26-000093) is ONE combined filing listed
+  under both CIKs, not two filings as the probe note first said. A filing can have several registrants under one
+  accession number, so `filings` keeps the first CIK that listed it and records the others in `also_filed_by_ciks`
+  (migration `002_co_registrants.sql`). The `reports` view therefore shows it once.
 
-## D3. How a filing gets its fiscal year and period (proposed 2026-11-07)
+## D3. How a filing gets its fiscal year and period (proposed 2026-11-07; revised the same day)
 
 - Primary rule, deterministic and applicable to every filing since 1994: from `reportDate` (period end) and the
   company's fiscal year end (`fiscalYearEnd`, MMDD). Fiscal year = the calendar year in which that fiscal year ends.
@@ -53,6 +57,20 @@ alternatives and the check that backs it. Dates are the day the entry was writte
   filing. It is the same data as companyfacts, costs one request per filing, and still does not exist before XBRL.
 - Check: unit tests on real (reportDate, fiscalYearEnd) pairs for all seven year-end patterns in the set
   (Dec, Jan, Mar, Jun, Sep, 52/53-week, null), plus the companyfacts comparison on new filings.
+- Revised after the first backfill (two things the data showed):
+  1. For 20 filings, mostly 1994-2015, EDGAR's `reportDate` is the filing date itself (gap 0 to 5 days), which put
+     a GE 10-K filed 2015-02-27 in fiscal 2015 next to the real fiscal 2015 report and created four duplicate
+     (company, year, period) keys. When the period of report is within 14 days of the filing date and off the
+     calendar, the label now comes from the last nominal period end at least 14 days before the filing date
+     (`label_method = 'rule_filing_date'`); all four duplicates disappeared and the SEC labels agree with the result.
+  2. The SEC's own XBRL labels disagree with the convention for 101 filings in a clean pattern: GameStop (all 73),
+     Walmart (20, only up to the 10-K filed 2014-03-21) and Toyota (8, up to the 20-F filed 2017-06-23) name the
+     fiscal year by the calendar year in which it STARTS, and two of them changed convention over time. That is why
+     the rule stays one deterministic convention and the SEC label is stored beside it (`sec_labels`, and the
+     `sec_fiscal_year` / `sec_fiscal_period` columns of the `reports` view). Four further disagreements are SEC-side
+     errors verified on the filings' cover pages (listed in `overrides.toml`).
+  3. Nominal quarter ends are month ends when the year end is a month end (30 June + 6 months = 31 December, not
+     30 December); found when the overdue check printed Microsoft's next quarter end as 30 December.
 
 ## D4. Storage model (proposed 2026-11-07)
 
@@ -93,7 +111,8 @@ alternatives and the check that backs it. Dates are the day the entry was writte
 
 - Postgres 17 in a `docker-compose.yml` for local use; any Postgres 14+ works through `DATABASE_URL`.
 - Schema as numbered SQL files applied idempotently at start-up and tracked in `schema_migrations`; psycopg 3 with
-  plain SQL. No Alembic, no ORM: the schema is small and a fresh agent can read SQL.
+  plain SQL. No Alembic, no ORM: the schema is small and a fresh agent can read SQL. Decided; `002_co_registrants.sql`
+  was the first real migration (D2).
 
 ## D8. Packaging and the one command (proposed 2026-11-07)
 
@@ -104,7 +123,7 @@ alternatives and the check that backs it. Dates are the day the entry was writte
   Prefect.
 - Exit code is the contract with the scheduler: 0 only when the run and every hard check passed.
 
-## D9. The morning check (proposed 2026-11-07)
+## D9. The morning check (proposed 2026-11-07; decided, see docs/morning-check.md for the final list)
 
 Every run ends by executing checks against the database and recording them in `checks`; `sec-filings check` reruns
 them without fetching and prints a one-screen report. "Wrong" is defined as any of:
@@ -131,12 +150,14 @@ is not among the checks.
 - A cross-check test: labels from the rule versus companyfacts labels on the fixture.
 - No test talks to EDGAR; the live path is exercised by the one command itself.
 
-## D11. The analyst's question: how far the table can go (proposed 2026-11-07)
+## D11. The analyst's question: how far the table can go (proposed 2026-11-07; revised, see docs/analyst-question.md)
 
 - "Late": computed as filing date minus period end compared with the statutory deadline for the filer's category
   (large accelerated 60 days for annual and 40 for quarterly, accelerated 75/40, non-accelerated 90/45, foreign
   private issuers 120 days for the 20-F), rolled to the next business day, plus the NT notices themselves, which are
-  the filer's own admission. Confidence is limited because the submissions API gives only the current filer category,
+  the filer's own admission. Revised: the foreign-private-issuer class is decided by the form of the latest annual
+  report (20-F/40-F), not by EDGAR's `category`, which calls Shell and Toyota "Large accelerated filer" although their
+  20-F deadline is four months regardless. Confidence is limited because the submissions API gives only the current filer category,
   not the historical one, and the deadline grace granted by an NT notice (15 days annual, 5 days quarterly).
 - "Corrected": an amendment (`10-K/A`, `20-F/A`) for the period. Confidence is limited because many amendments add
   Part III information or an exhibit rather than correct a figure; telling those apart needs the amendment's own text,
@@ -168,7 +189,7 @@ AGENTS.md            the handover kit entry point for any agent (decisions, chec
 brief.md, companies.csv
 pyproject.toml, docker-compose.yml, .env.example
 src/sec_filings/     edgar client, labelling rule, loader, checks, cli, flow
-sql/                 numbered schema files
+src/sec_filings/sql/ numbered schema files (inside the package so `pip install` ships them)
 tests/               unit, replay and cross-check tests with fixtures
 docs/decisions.md    this file
 docs/morning-check.md, docs/what-i-didnt-trust.md, docs/analyst-question.md
