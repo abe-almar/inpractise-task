@@ -33,7 +33,11 @@ def load_companies(path: Path) -> list[str]:
         if "ticker" not in names:
             raise ValueError(f"{path}: expected a header row with a 'ticker' column")
         key = reader.fieldnames[names.index("ticker")]
-        tickers = list(dict.fromkeys(t for row in reader if (t := (row.get(key) or "").strip().upper())))
+        tickers: list[str] = []
+        for row in reader:
+            ticker = (row.get(key) or "").strip().upper()
+            if ticker and ticker not in tickers:
+                tickers.append(ticker)
     if not tickers:
         raise ValueError(f"{path}: no tickers found")
     return tickers
@@ -255,9 +259,12 @@ def ingest_filer(
     rows = parse_page(cik, recent)
     recent_dates = [_as_date(d) for d in recent.get("filingDate") or [] if d]
     recent_window_start = min(recent_dates) if recent_dates else None
-    # the disappearance window reaches back to where the previous fetch of this page started, so a filing that
-    # vanished while being the oldest on the page is still noticed
-    window_start = min(d for d in (recent_window_start, filer.get("recent_window_start")) if d) if recent_window_start else None
+    # The disappearance window starts where this page starts, or where the previous fetch of it started if that was
+    # earlier, so a filing that vanished while being the oldest on the page is still noticed.
+    window_start = recent_window_start
+    previous_start = filer.get("recent_window_start")
+    if window_start and previous_start and previous_start < window_start:
+        window_start = previous_start
 
     # history is read once per filer, again when a coverage gap is on record, and for everyone on --full
     read_history = backfill and (full or not filer.get("backfill_completed_at") or filer.get("coverage_gap_since"))
@@ -268,7 +275,8 @@ def ingest_filer(
             _store_snapshot(conn, cik, page["name"], run_id, page_raw, page_data)
             rows.extend(parse_page(cik, page_data))
             page_from = _as_date(page.get("filingFrom"))
-            window_start = min(d for d in (window_start, page_from) if d) if page_from else window_start
+            if page_from and (window_start is None or page_from < window_start):
+                window_start = page_from   # a history page extends the window back to its oldest filing
             pages += 1
 
     inserted, updated = upsert_filings(conn, rows, run_id)

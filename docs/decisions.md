@@ -44,9 +44,10 @@ that day. Evidence lives in `docs/evidence/`, review reports in `docs/review-evi
   year ending 2027-01-02 against 31 December is 2026, as the company itself names it). Quarters count from the
   previous nominal year end (Apple's quarter ended 2025-12-27 is 2026 Q1). Ten days of tolerance absorb 52/53-week
   calendars. One rule for everyone, never bent per company.
-- When EDGAR's period of report is the filing date itself (an old metadata quirk, 19 filings from 1994-2015), the
-  label comes from the last nominal period end before the filing date (`rule_filing_date`); for an amendment that
-  inference can point at the wrong period, so each such amendment is a hard finding until a person reads it.
+- When EDGAR's period of report is off the fiscal calendar and within 14 days of the filing date (an old metadata
+  quirk that stores the filing date as the period, 19 filings from 1994-2015), the label comes from the last nominal
+  period end at least 14 days before the filing date (`rule_filing_date`); for an amendment that inference can point
+  at the wrong period, so each such amendment is a hard finding until a person reads it.
 - When EDGAR's period of report is wrong for one filing, `[[filing_corrections]]` carries the cover's date with the
   evidence; EDGAR's value stays in `report_date`, the label follows the correction (`corrected`). See D15.
 - Fiscal year end: EDGAR's `fiscalYearEnd`, or a `[[fiscal_year_ends]]` override (Alibaba's is null in EDGAR),
