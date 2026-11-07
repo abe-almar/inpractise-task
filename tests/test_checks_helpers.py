@@ -142,24 +142,27 @@ def test_statutory_deadline_tables():
     assert checks.NT_GRACE == {"annual": 15, "quarterly": 5}
 
 
-def test_history_gap_first_run_passes_with_a_note():
-    out = checks.check_history_gap(facts(previous_ok_run_started=None, window_starts={1: date(2026, 11, 1)}))
-    assert out.name == "history_gap" and out.severity == "hard" and out.passed is True
-    assert out.summary == "first successful run; nothing to compare with"
-    assert out.detail == {}
+# check_history_gap is database-backed since review pass 2: see tests/test_replay_db.py::test_history_gap_is_persistent_state
 
 
-def test_history_gap_fails_when_a_recent_page_starts_after_the_previous_run():
-    out = checks.check_history_gap(facts(
-        previous_ok_run_started=date(2026, 1, 1),
-        window_starts={320193: date(1994, 1, 26), 2115436: date(2026, 7, 1), 34088: None},
-    ))
-    assert out.passed is False
-    assert out.detail["items"] == [{"key": "2115436", "cik": 2115436, "recent_page_starts": "2026-07-01", "previous_ok_run": "2026-01-01"}]
-    assert "backfill --full" in out.summary
-    ok = checks.check_history_gap(facts(previous_ok_run_started=date(2026, 7, 1), window_starts={2115436: date(2026, 7, 1)}))
-    assert ok.passed is True   # starting on the same day is not a gap
-    assert ok.summary == "previous successful run 2026-07-01 is inside every filer's recent page"
+def test_sec_labels_refreshed_check():
+    ok = checks.check_sec_labels_refreshed(facts(sec_labels_refreshed=[320193, 34088]))
+    assert ok.name == "sec_labels_refreshed" and ok.severity == "hard" and ok.passed is True
+    assert ok.summary == "SEC labels refreshed for 2 filer(s)"
+    assert ok.detail == {"items": [], "refreshed": [320193, 34088]}
+    none = checks.check_sec_labels_refreshed(facts())
+    assert none.passed is True and none.summary == "SEC labels refreshed for 0 filer(s)"
+    bad = checks.check_sec_labels_refreshed(facts(sec_labels_refreshed=[320193], sec_label_refresh_errors={34088: "HTTP 503 after retries"}))
+    assert bad.passed is False and bad.severity == "hard"
+    assert bad.summary == "SEC label refresh failed for 1 filer(s); retried automatically next run"
+    assert bad.detail == {"items": [{"key": "34088", "cik": 34088, "error": "HTTP 503 after retries"}], "refreshed": [320193]}
+    assert hard_failures([bad]) == [bad]
+    assert apply_accepted(bad, [{"check": "sec_labels_refreshed", "key": "34088"}]).passed is True
+
+
+def test_sec_label_constants():
+    assert checks.SEC_LABEL_PENDING_DAYS == 21
+    assert not hasattr(checks, "SEC_LABEL_RETRY_DAYS")    # unlabelled XBRL reports are retried without an age bound
 
 
 def test_run_complete_counts_fetch_errors():

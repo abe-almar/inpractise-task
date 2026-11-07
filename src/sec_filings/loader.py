@@ -288,7 +288,7 @@ def ingest_filer(
     data, raw = client.submissions(cik)
     recent = validate_submissions(cik, data)
     with conn.cursor() as cur:
-        cur.execute("SELECT backfill_completed_at, coverage_gap_since FROM filers WHERE cik = %s", (cik,))
+        cur.execute("SELECT backfill_completed_at, coverage_gap_since, recent_window_start FROM filers WHERE cik = %s", (cik,))
         row = cur.fetchone()
         # history is read when it was never read, when a coverage gap is on record, or on --full
         history_done = bool(row and row["backfill_completed_at"] and row["coverage_gap_since"] is None)
@@ -318,6 +318,10 @@ def ingest_filer(
     recent_dates = [_as_date(d) for d in recent.get("filingDate") or [] if d]
     window_start = min(recent_dates) if recent_dates else None
     recent_window_start = window_start
+    # the window compared for disappearances also reaches back to where the previous fetch of this page started,
+    # so a filing that vanished while being the oldest on the page is still noticed
+    if row and row.get("recent_window_start") and window_start and row["recent_window_start"] < window_start:
+        window_start = row["recent_window_start"]
     pages = 1
     history_fetched = False
     if backfill and (full or not history_done):

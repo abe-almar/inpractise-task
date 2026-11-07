@@ -435,12 +435,31 @@ def test_validate_submissions_rejects_an_empty_or_ragged_recent_block():
         validate_submissions(320193, {"cik": "0000320193", "filings": {}})
     with pytest.raises(EdgarError, match="empty recent block"):
         validate_submissions(320193, {"cik": "0000320193"})
-    with pytest.raises(EdgarError, match="column form has a different length"):
+    with pytest.raises(EdgarError, match="column form has 1 entries, accessionNumber has 2"):
         validate_submissions(320193, _page(form=["10-K"]))
-    with pytest.raises(EdgarError, match="column filingDate has a different length"):
+    with pytest.raises(EdgarError, match="column filingDate has 3 entries, accessionNumber has 2"):
         validate_submissions(320193, _page(filingDate=["2026-11-03", "2026-11-03", "2026-11-03"]))
-    with pytest.raises(EdgarError, match="column form"):
+    with pytest.raises(EdgarError, match="column form is missing"):
         validate_submissions(320193, _page(form=None))
+    with pytest.raises(EdgarError, match="column form has 0 entries"):
+        validate_submissions(320193, _page(form=[]))
+    with pytest.raises(EdgarError, match="column filingDate is missing"):
+        validate_submissions(320193, _page(filingDate=None))
+
+
+def test_validate_submissions_checks_every_page_column():
+    assert loader.PAGE_COLUMNS == (
+        "accessionNumber", "filingDate", "reportDate", "acceptanceDateTime", "act", "fileNumber", "filmNumber",
+        "primaryDocument", "primaryDocDescription", "isXBRL", "isInlineXBRL", "size", "form",
+    )
+    with pytest.raises(EdgarError, match="column reportDate has 1 entries, accessionNumber has 2"):
+        validate_submissions(320193, _page(reportDate=["2026-09-26"]))
+    for key in ("acceptanceDateTime", "act", "fileNumber", "filmNumber", "primaryDocument", "primaryDocDescription", "isXBRL", "isInlineXBRL", "size"):
+        with pytest.raises(EdgarError, match=f"column {key} has 3 entries, accessionNumber has 2"):
+            validate_submissions(320193, _page(**{key: ["", "", ""]}))
+    # optional columns may be absent altogether; columns the loader never reads are not checked
+    assert validate_submissions(320193, _page(reportDate=None)) is not None
+    assert validate_submissions(320193, _page(items=["2.02"], core_type=[]))["items"] == ["2.02"]
 
 
 @pytest.mark.parametrize("file_name", sorted(FIXTURE_FILES.values()))
