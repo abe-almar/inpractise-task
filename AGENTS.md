@@ -119,8 +119,9 @@ if no successful run started today (UTC). Use it when the scheduler's log is gon
 
 `error: cannot connect to the database at HOST:PORT` means the run never started: there is no `runs` row and no checks.
 Docker saying `Healthy` does not rule it out, because that check runs inside the container. If another program held the
-port when the container started, `DB_PORT=<free port> make run` moves the database. On a second machine, with the port
-freed afterwards, the container stayed unreachable until `docker compose up -d --force-recreate db`.
+port when the container started, `DB_PORT=<free port> make run` moves the database when `make` is the one supplying it;
+with your own `DATABASE_URL` or `.env`, change the URL and `DB_PORT` together, then run `make db`. On a second machine,
+with the port freed afterwards, the container stayed unreachable until `docker compose up -d --force-recreate db`.
 
 ## 6. Changing the labelling rule
 

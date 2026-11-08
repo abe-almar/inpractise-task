@@ -137,7 +137,8 @@ that day. Evidence lives in `docs/evidence/`, review reports in `docs/review-evi
   to be taken already, and 25432 is outside the range systems hand out for outgoing connections. The default is written
   in the Makefile and in `docker-compose.yml`; a test holds them equal. A database that cannot be reached, or a
   malformed URL, is one line and exit 2, not a stack trace: it names the host and port, masks the URL's password, and does
-  not quote a malformed string. `make` sets `DB_PORT` only when it supplies the database; with a `.env`, Docker reads it there.
+  not quote a malformed string. `make` sets `DB_PORT` only when it supplies the database; with a `.env`, Docker reads it there, a `DB_PORT` in the
+  shell wins over it, and neither changes the job's `DATABASE_URL`, so the two are changed together.
 - Rejected: `make run` always calling `backfill`. It costs the same when nothing is pending, but it would repair a
   coverage gap by itself, and `history_gap` on a filer already read is meant to stay red until someone has looked.
   Rejected: `make` reading `.env`, as shell or with a grep. Either is a second reader that disagrees with the job's
@@ -193,8 +194,9 @@ that day. Evidence lives in `docs/evidence/`, review reports in `docs/review-evi
 - Claude Code orchestrated, researched and implemented, with a sub-agent for the tests. The Hermes profile
   `takehome` (gpt-6.1-sol) audited the table through a different EDGAR route (Atom feeds; 183 filings, MATCH) and,
   with no persona injected, played the fresh agent that must add five companies from the kit alone. The Hermes
-  profile `takehomereviewer` ran nine adversarial passes: five on the build (FAIL, FAIL, FAIL, FAIL, PASS), one on the
-  simplification (PASS WITH FINDINGS), three on `make run` (FAIL, FAIL, PASS). The setup is described in
+  profile `takehomereviewer` ran eleven adversarial passes: five on the build (FAIL, FAIL, FAIL, FAIL, PASS), one on the
+  simplification (PASS WITH FINDINGS), three on `make run` (FAIL, FAIL, PASS), two on the local port and the connection
+  error (FAIL, PASS WITH FINDINGS, whose wording finding was then fixed). The setup is described in
   `docs/agent-setup.md`.
 
 ## D14. Repository layout
@@ -207,7 +209,7 @@ src/sec_filings/     settings, edgar (client), fiscal (rule), db (schema), loade
 src/sec_filings/sql/ 001_schema.sql
 tests/               unit, replay and cross-check tests with trimmed real fixtures
 docs/                this log, morning-check, what-i-didnt-trust, analyst-question, agent-setup, agent-personas
-docs/evidence/       probes, run logs, cover-page checks, tools; docs/review-evidence/ the nine review reports;
+docs/evidence/       probes, run logs, cover-page checks, tools; docs/review-evidence/ the eleven review reports;
                      docs/agent-runs/ the audit and the fresh-agent test
 ```
 

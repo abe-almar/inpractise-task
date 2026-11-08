@@ -351,3 +351,5 @@ nothing created
 # ---------- a deleted CLI is rebuilt
 rebuild exit=0
 .venv/bin/sec-filings
+
+# The last sentence of the 'cannot connect' message was reworded after this log was taken, to qualify the DB_PORT advice (review pass 11).

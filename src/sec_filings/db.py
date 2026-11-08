@@ -36,7 +36,8 @@ def _unreachable_message(database_url: str, exc: psycopg.OperationalError) -> st
     if info.get("password"):
         reason = reason.replace(info["password"], "***")
     message = (f"cannot connect to the database at {host}:{port} ({reason}). Is it running? "
-               "If another program holds that port, `DB_PORT=<free port> make run` moves the local database.")
+               "If another program holds that port, `DB_PORT=<free port> make run` moves the database make supplies; "
+               "with your own DATABASE_URL or .env, change the port there.")
     return " ".join(message.split())
 
 
