@@ -704,6 +704,42 @@ def test_a_first_daily_run_loads_the_whole_history(schema, tmp_path: Path):
     assert conn.execute("SELECT count(*) AS n FROM filers WHERE backfill_completed_at IS NULL").fetchone()["n"] == 0
 
 
+@pytest.mark.parametrize("bad_page", [{}, None], ids=["empty", "http-404"])
+def test_a_history_page_that_fails_leaves_the_filer_unread_until_it_is_served(schema, tmp_path: Path, bad_page):
+    """Until 2026-11-08 an empty history page counted as read: the filer was marked complete and never read again."""
+    name, conn = schema
+    pages = all_fixtures()
+    client = FakeEdgarClient(copy.deepcopy(pages), companyfacts=agreeing_facts(pages))
+    history = add_history(client, AAPL)
+    good_page = client.older_pages[history]
+    settings = make_settings(name, tmp_path, ["AAPL"], CORRECTION_TOML)
+
+    def serve(page):
+        client.older_pages.pop(history, None)
+        if page is not None:
+            client.older_pages[history] = page
+
+    def history_read() -> int:
+        return conn.execute("SELECT count(*) AS n FROM filers WHERE backfill_completed_at IS NOT NULL").fetchone()["n"]
+
+    serve(bad_page)
+    failed = daily_run(settings, mode="daily", client=client, today=TODAY)
+    assert not failed.ok and AAPL in failed.fetch_errors and "run_complete" in _hard_failures(failed)
+    assert history_read() == 0
+
+    # the page is back: the next plain daily run reads the history and the run is clean
+    serve(good_page)
+    repaired = daily_run(settings, mode="daily", client=client, today=TODAY + timedelta(days=1))
+    assert repaired.ok, _hard_failures(repaired)
+    assert history_read() == 1
+
+    # a database from before the first-read rule can hold a never-read filer with a gap: the gap survives a failed read
+    conn.execute("UPDATE filers SET backfill_completed_at = NULL, coverage_gap_since = %s WHERE cik = %s", (TODAY, AAPL))
+    serve(bad_page)
+    assert not daily_run(settings, mode="daily", client=client, today=TODAY + timedelta(days=2)).ok
+    assert conn.execute("SELECT coverage_gap_since FROM filers WHERE cik = %s", (AAPL,)).fetchone()["coverage_gap_since"] == TODAY
+
+
 def test_advance_coverage_rules(schema):
     _, conn = schema
     run_id = conn.execute("INSERT INTO runs (mode) VALUES ('daily') RETURNING id").fetchone()["id"]
@@ -750,6 +786,10 @@ def test_advance_coverage_rules(schema):
     assert loader.ingest_filer(conn, client, run_id, cik, backfill=True, overrides_fye=None, today=date(2026, 11, 9)).history_fetched is True
     assert coverage()["coverage_gap_since"] is None
     assert loader.ingest_filer(conn, client, run_id, cik, backfill=True, overrides_fye=None, today=date(2026, 11, 10)).history_fetched is False
+    # a database from before the first-read rule can hold a never-read filer with a gap: its first read is the repair
+    conn.execute("UPDATE filers SET backfill_completed_at = NULL, coverage_gap_since = %s WHERE cik = %s", (date(2026, 11, 3), cik))
+    assert loader.ingest_filer(conn, client, run_id, cik, backfill=False, overrides_fye=None, today=date(2026, 11, 11)).history_fetched is True
+    assert coverage()["coverage_gap_since"] is None
 
 
 # ----------------------------------------------------------------------------- the upsert's ownership rule

@@ -5,7 +5,8 @@ the SEC, each labelled with the fiscal year and period it covers. Source: EDGAR'
 
 ## Run it
 
-You need `make`, Python 3.12+ and Docker (no Docker if you bring your own Postgres, see below).
+You need `make`, Python 3.12+ and Docker (no Docker if you bring your own Postgres, see below). `make` uses
+`python3.12` if it finds it and `python3` otherwise; `PYTHON=python3.13 make run` chooses another.
 
 ```bash
 make run
@@ -15,11 +16,11 @@ That is the one command, from a fresh clone and every morning after. It starts t
 into `.venv`, fetches the ticker map and the filings of every CIK, validates each page, upserts the filings, labels
 them, refreshes the SEC's own labels for filers with news, runs the morning checks, prints a report and exits 0 only
 when the run and every hard check passed. The first run reads every filer's whole history (about 140 requests, under
-a minute); later runs read one page per CIK (about 22 requests, a few seconds). Running it twice in a morning changes
-nothing.
+a minute), as does the first run after adding a company, for that company; other runs read one page per CIK (about 22
+requests, a few seconds). Running it twice in a morning changes nothing.
 
-The job reads its connection from `DATABASE_URL`. `make` takes it from the environment, then from `.env`, and
-otherwise uses the database in `docker-compose.yml`, which is the only case in which it starts Docker. `SEC_USER_AGENT`,
+The job reads its connection from `DATABASE_URL`, in the environment or in a `.env` file. If neither mentions it,
+`make` supplies the database in `docker-compose.yml`, and that is the only case in which it starts Docker. `SEC_USER_AGENT`,
 `SEC_RATE_LIMIT_PER_SEC`, `COMPANIES_FILE` and `OVERRIDES_FILE` are optional (see `.env.example`).
 
 ## Ask it something

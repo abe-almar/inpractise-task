@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -10,6 +11,7 @@ import pytest
 from sec_filings import loader
 from sec_filings.edgar import EdgarError
 from sec_filings.loader import Overrides, load_companies, parse_page, validate_submissions
+from sec_filings.settings import load_dotenv
 
 from conftest import FIXTURE_FILES, TRACKED_FORMS, load_fixture
 
@@ -445,6 +447,30 @@ def test_validate_submissions_rejects_an_empty_or_ragged_recent_block():
         validate_submissions(320193, _page(form=[]))
     with pytest.raises(EdgarError, match="column filingDate is missing"):
         validate_submissions(320193, _page(filingDate=None))
+
+
+def test_validate_history_page_accepts_exactly_what_was_advertised():
+    loader.validate_history_page(320193, {"name": "p.json", "filingCount": 2}, _page(n=2)["filings"]["recent"])
+
+
+@pytest.mark.parametrize("body, advertised, message", [
+    ({}, 2, "holds 0 filings, the recent page advertised 2"),
+    (_page(n=1)["filings"]["recent"], 2, "holds 1 filings, the recent page advertised 2"),
+    (_page(n=2)["filings"]["recent"], None, "holds 2 filings, the recent page advertised None"),
+    ({}, 0, "column form is missing"),
+    (_page(form=["10-K"])["filings"]["recent"], 2, "column form has 1 entries, accessionNumber has 2"),
+], ids=["empty", "truncated", "no-count-advertised", "advertised-empty", "ragged"])
+def test_validate_history_page_rejects_anything_else(body, advertised, message):
+    with pytest.raises(EdgarError, match=message):
+        loader.validate_history_page(320193, {"name": "p.json", "filingCount": advertised}, body)
+
+
+def test_dotenv_reader_takes_literal_values_and_the_export_form(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(os, "environ", {"ALREADY": "from the environment"})
+    env = tmp_path / ".env"
+    env.write_text('SPACED = postgresql://h/d?x=1&y=2\nexport EXPORTED="postgresql://h/e"\n# COMMENTED=no\nALREADY=from the file\n')
+    load_dotenv(env)
+    assert os.environ == {"SPACED": "postgresql://h/d?x=1&y=2", "EXPORTED": "postgresql://h/e", "ALREADY": "from the environment"}
 
 
 def test_validate_submissions_checks_every_page_column():

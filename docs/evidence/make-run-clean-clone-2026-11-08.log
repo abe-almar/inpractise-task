@@ -3,11 +3,11 @@
 state before: .venv absent, .env absent, DATABASE_URL ''
 
 $ make run
-python3.12 -m venv .venv
+/opt/homebrew/bin/python3.12 -m venv --clear .venv
 .venv/bin/pip install --quiet -e ".[dev]"
 
- Volume clone_sec_filings_pgdata Creating 
  Network clone_default Creating 
+ Volume clone_sec_filings_pgdata Creating 
  Volume clone_sec_filings_pgdata Creating 
  Network clone_default Creating 
  Volume clone_sec_filings_pgdata Created 
@@ -20,9 +20,9 @@ python3.12 -m venv .venv
  Container clone-db-1 Started 
  Container clone-db-1 Waiting 
  Container clone-db-1 Healthy 
-run 1 (daily): status=ok filers=21/21 filings seen=1801 new=1800 relabelled=1800 requests=139 errors=0 duration=35s
+run 1 (daily): status=ok filers=21/21 filings seen=1801 new=1800 relabelled=1800 requests=139 errors=0 duration=43s
 [ok  ] run_complete: fetched and validated 21 of 21 filer pages
-[ok  ] http_health: 0 EDGAR errors, 0 retries, 35s of a 600s budget
+[ok  ] http_health: 0 EDGAR errors, 0 retries, 43s of a 600s budget
 [ok  ] tickers_resolved: every ticker is in company_tickers.json
 [ok  ] cik_changes_acknowledged: no ticker changed CIK
 [ok  ] fiscal_year_end_known: every filer has a fiscal year end
@@ -61,7 +61,7 @@ run 1 (daily): status=ok filers=21/21 filings seen=1801 new=1800 relabelled=1800
         ... 123 more
 RESULT: OK
 exit=0
-elapsed=47s
+elapsed=56s
 
 $ make run
  Container clone-db-1 Running 
@@ -97,7 +97,7 @@ run 2 (daily): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 reques
 [info] news: 0 new filing(s) this run, of which 0 amendment(s) or late-filing notice(s)
 RESULT: OK
 exit=0
-elapsed=5s
+elapsed=7s
 
 $ make report TICKER=AAPL YEAR=2009 PERIOD=FY
  Container clone-db-1 Running 
@@ -169,7 +169,7 @@ $ make check
  Container clone-db-1 Running 
  Container clone-db-1 Waiting 
  Container clone-db-1 Healthy 
-latest run 2 (daily) started 2026-11-08 09:56 UTC status=ok filers=21/21 new filings=0 errors=0
+latest run 2 (daily) started 2026-11-08 10:19 UTC status=ok filers=21/21 new filings=0 errors=0
 [ok] ran_today: a successful run started today (UTC)
 [ok  ] run_complete: fetched and validated 21 of 21 filer pages
 [ok  ] http_health: 0 EDGAR errors, 0 retries, 5s of a 600s budget
@@ -208,34 +208,34 @@ $ make verify-labels
 {"labels_stored": 1017, "compared": 1017, "raw_disagreements": 105, "filers_without_xbrl": []}
 [info] labels_match_sec: 4 real disagreement(s) with the SEC's XBRL label on 1017 filings compared; 1 XBRL filing(s) older than 21 days still without a SEC label; 101 are documented naming conventions (GME 73, TM 8, WMT 20); 0 recent filing(s) awaiting one (all 5 accepted in overrides.toml)
 exit=0
-elapsed=6s
+elapsed=5s
 
 $ make test
-........................................................................ [ 24%]
-........................................................................ [ 49%]
-........................................................................ [ 73%]
-............................................................ssssssssssss [ 98%]
-ss...                                                                    [100%]
-279 passed, 14 skipped in 0.33s
+........................................................................ [ 23%]
+........................................................................ [ 47%]
+........................................................................ [ 71%]
+...................................................................sssss [ 95%]
+sssssssssss...                                                           [100%]
+286 passed, 16 skipped in 0.33s
 exit=0
 
 $ make test-db
  Container clone-db-1 Running 
  Container clone-db-1 Waiting 
  Container clone-db-1 Healthy 
-..............                                                           [100%]
-14 passed in 1.81s
+................                                                         [100%]
+16 passed in 2.07s
 exit=0
 
 $ make summary | wc -l
       20
 
 $ make backfill    # nothing pending: costs the same as a morning run
-run 3 (backfill): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 requests=22 errors=0 duration=6s
+run 3 (backfill): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 requests=22 errors=0 duration=5s
 RESULT: OK
 
 $ echo NVDA >> companies.csv && make run    # adding a company is one line
-run 4 (daily): status=ok filers=22/22 filings seen=676 new=118 relabelled=118 requests=25 errors=0 duration=6s
+run 4 (daily): status=ok filers=22/22 filings seen=676 new=118 relabelled=118 requests=25 errors=0 duration=5s
 [FAIL] labels_match_sec: 25 real disagreement(s) with the SEC's XBRL label on 1086 filings compared; 1 XBRL filing(s) older than 21 days still without a SEC label; 101 are documented naming convention
 RESULT: ATTENTION NEEDED
 
@@ -249,4 +249,41 @@ run 5 (daily): status=ok filers=22/22 filings seen=582 new=0 relabelled=0 reques
 RESULT: ATTENTION NEEDED
 
 # The labels_match_sec failure above is the hard check asking a person to look at a new company (AGENTS.md section 4,
-# step 5): the twenty submitted companies were clean on run 2, so all 25 disagreements are NVDA. NVDA is not on the submitted list.
+# step 5): the twenty submitted companies were clean on run 2, so all its disagreements are NVDA, which is not on the submitted list.
+
+# ---------- which database make chooses ('starts compose' means make runs docker compose before the job)
+nothing set                                   starts compose
+environment                                   no docker
+.env with spaces (not valid shell)            no docker
+    the job tried: remote.example.invalid
+.env unquoted & (shell would drop it)         no docker
+    the job tried: remote.example.invalid
+.env with export                              no docker
+    the job tried: remote.example.invalid
+.env, only commented out                      starts compose
+.env copied from the example                  starts compose
+$ make test-db    # the URL lives only in .env: must fail, not skip
+/bin/sh: DATABASE_URL: this target needs DATABASE_URL in the environment, .env is not enough
+make: *** [test-db] Error 127
+
+# ---------- a machine whose only Python is python3 (no python3.12 on the PATH)
+no python3.12
+Python 3.14.6
+286 passed, 16 skipped in 1.98s
+
+# ---------- an interpreter that is too old
+$ PYTHON=/usr/bin/python3 make run
+Python 3.12+ is needed, /Library/Developer/CommandLineTools/usr/bin/python3 is 3.9.6: set PYTHON to a newer one
+make: *** [.venv/bin/sec-filings] Error 1
+nothing created
+
+# ---------- a deleted CLI is rebuilt
+rebuild exit=0
+.venv/bin/sec-filings
+
+# ---------- Linux (python:3.12-slim, GNU Make 4), DATABASE_URL set, so no Docker inside the container
+GNU Make 4.4.1
+286 passed, 16 skipped in 0.70s
+16 passed in 3.28s
+run 5 (daily): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 requests=22 errors=0 duration=5s
+RESULT: OK

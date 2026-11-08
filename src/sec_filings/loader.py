@@ -204,17 +204,32 @@ def validate_submissions(cik: int, data: dict) -> dict:
     if got != str(cik):
         raise EdgarError(f"submissions page for CIK {cik} says cik={data.get('cik')!r}")
     recent = (data.get("filings") or {}).get("recent") or {}
-    accessions = recent.get("accessionNumber") or []
-    if not accessions:
+    if not recent.get("accessionNumber"):
         raise EdgarError(f"submissions page for CIK {cik} has an empty recent block")
-    for key in PAGE_COLUMNS:
-        column = recent.get(key)
-        if column is not None and len(column) != len(accessions):
-            raise EdgarError(f"submissions page for CIK {cik}: column {key} has {len(column)} entries, accessionNumber has {len(accessions)}")
-    for key in ("form", "filingDate"):
-        if not recent.get(key):
-            raise EdgarError(f"submissions page for CIK {cik}: column {key} is missing")
+    _validate_columns(f"submissions page for CIK {cik}", recent)
     return recent
+
+
+def validate_history_page(cik: int, advertised: dict, page: dict) -> None:
+    """A history page must hold exactly the filings the recent page advertised for it. Accepting an empty or truncated
+    one would mark the filer's history as read for good, with reports missing and no check able to tell."""
+    where = f"history page {advertised.get('name')} of CIK {cik}"
+    count = len(page.get("accessionNumber") or [])
+    if count != advertised.get("filingCount"):
+        raise EdgarError(f"{where} holds {count} filings, the recent page advertised {advertised.get('filingCount')}")
+    _validate_columns(where, page)
+
+
+def _validate_columns(where: str, block: dict) -> None:
+    """Every column as long as the accession numbers, and the two the job cannot do without present."""
+    accessions = block.get("accessionNumber") or []
+    for key in PAGE_COLUMNS:
+        column = block.get(key)
+        if column is not None and len(column) != len(accessions):
+            raise EdgarError(f"{where}: column {key} has {len(column)} entries, accessionNumber has {len(accessions)}")
+    for key in ("form", "filingDate"):
+        if not block.get(key):
+            raise EdgarError(f"{where}: column {key} is missing")
 
 
 def parse_page(cik: int, page: dict) -> list[dict]:
@@ -273,6 +288,7 @@ def ingest_filer(
     if read_history:
         for page in data.get("filings", {}).get("files", []) or []:
             page_data, page_raw = client.submissions_page(page["name"])
+            validate_history_page(cik, page, page_data)
             _store_snapshot(conn, cik, page["name"], run_id, page_raw, page_data)
             rows.extend(parse_page(cik, page_data))
             page_from = _as_date(page.get("filingFrom"))

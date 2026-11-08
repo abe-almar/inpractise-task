@@ -14,7 +14,8 @@ class SettingsError(RuntimeError):
 
 
 def load_dotenv(path: Path) -> None:
-    """Minimal .env reader: KEY=VALUE lines, optional quotes, never overrides variables already set."""
+    """Minimal .env reader: KEY=VALUE lines, optional `export` and quotes, values taken literally, never overrides
+    variables already set."""
     if not path.is_file():
         return
     for raw in path.read_text(encoding="utf-8").splitlines():
@@ -22,7 +23,7 @@ def load_dotenv(path: Path) -> None:
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, value = line.split("=", 1)
-        key = key.strip()
+        key = key.strip().removeprefix("export ").strip()
         value = value.strip()
         if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
             value = value[1:-1]

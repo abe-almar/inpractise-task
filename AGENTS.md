@@ -25,7 +25,8 @@ make verify-labels                             # loads the SEC's XBRL labels; ex
 
 `make help` lists every target; each is a thin wrapper over `.venv/bin/sec-filings`. With no `DATABASE_URL` in the
 environment or in `.env`, `make` uses the Postgres in `docker-compose.yml` and starts it; set `DATABASE_URL` to use
-another one. If `run` ends with `RESULT: ATTENTION NEEDED`, read the `[FAIL]` lines; section 5 says what each means.
+another one. If `.venv` is broken (the repository moved, say), delete it and the next `make` rebuilds it. If `run` ends
+with `RESULT: ATTENTION NEEDED`, read the `[FAIL]` lines; section 5 says what each means.
 Counts in this kit (20 companies, 21 CIKs, 22 requests) describe the original list; yours follow `companies.csv`
 and the CIKs in `overrides.toml`.
 
@@ -89,6 +90,9 @@ The full log with alternatives and evidence is `docs/decisions.md`. The ones tha
 7. Add a test case to `tests/test_fiscal.py` if the year-end pattern is new (section 6).
 8. Copy the run output into `docs/evidence/` with the date, add a dated entry to `docs/decisions.md` for any
    decision taken, then run the completion checks in section 7.
+
+Taking a company off the list marks it inactive and keeps its filings (D5). Known limitation: `labels_match_sec` still
+reads an inactive company's filings, so clear or accept its open findings before removing it, or the check stays red.
 
 ## 5. When the morning check fails
 

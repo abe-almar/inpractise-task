@@ -40,7 +40,8 @@ off: the kit had no per-filing correction. That became `[[filing_corrections]]`,
 
 **The one command on an empty database.** Six review passes and the fresh agent all followed the README's first step,
 `backfill`, so nobody ran the README's one command on nothing. When it became `make run` I tried that: `RESULT: OK`,
-557 of 1,800 filings, no Apple 2009. A filer's first run now reads its history, whichever the mode.
+557 of 1,800 filings, no Apple 2009. A filer's first run now reads its history, whichever the mode. The review of that
+fix found an empty history page counted as read, for good; a page must now hold what EDGAR advertised for it.
 
 **What held up.** An independent audit through a different route (the www.sec.gov Atom feeds) matched all 183
 accession numbers, forms and filing dates for Apple and GameStop since 2009, Shell's 20-Fs and both Exxon CIKs, and

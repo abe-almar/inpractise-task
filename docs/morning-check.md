@@ -10,7 +10,7 @@ stored checks without touching EDGAR, and adds one condition of its own: that a 
 
 | check | severity | it fails when | why that would be wrong |
 |---|---|---|---|
-| `run_complete` | hard | a filer page could not be fetched, is for another CIK, has an empty or inconsistent recent block | a partial or empty page looks like "no news" |
+| `run_complete` | hard | a filer page could not be fetched, is for another CIK, has an empty or inconsistent recent block, or is a history page without the filings advertised for it | a partial or empty page looks like "no news" |
 | `tickers_resolved` | hard | a ticker in `companies.csv` is not in `company_tickers.json` and has no evidenced CIK override | the company would silently stop being tracked |
 | `cik_changes_acknowledged` | hard | a ticker now maps to a different CIK than before, and nobody has recorded the old CIK in `overrides.toml` | Exxon did exactly this on 2026-07-01; a job keyed on the new CIK loses thirty years |
 | `fiscal_year_end_known` | hard | a filer has no fiscal year end in EDGAR and no override | no label can be derived (Alibaba's is null in EDGAR) |
