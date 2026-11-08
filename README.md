@@ -15,13 +15,14 @@ make run
 That is the one command, from a fresh clone and every morning after. It starts the local Postgres, installs the job
 into `.venv`, fetches the ticker map and the filings of every CIK, validates each page, upserts the filings, labels
 them, refreshes the SEC's own labels for filers with news, runs the morning checks, prints a report and exits 0 only
-when the run and every hard check passed. The first run reads every filer's whole history (about 140 requests, under
+when the run and every hard check passed. The first run reads every filer's whole history (about 140 requests, about
 a minute), as does the first run after adding a company, for that company; other runs read one page per CIK (about 22
 requests, a few seconds). Running it twice in a morning changes nothing.
 
 The job reads its connection from `DATABASE_URL`, in the environment or in a `.env` file. With neither, `make` supplies
 the database in `docker-compose.yml`, and that is the only case in which it starts Docker (`make db` starts it by hand).
-That database listens on localhost only, on port 25432; `DB_PORT=5433 make run` moves it, data included. `SEC_USER_AGENT`,
+That database listens on localhost only, on port 25432; when `make` is the one supplying it, `DB_PORT=5433 make run`
+moves it, data included. `SEC_USER_AGENT`,
 `SEC_RATE_LIMIT_PER_SEC`, `COMPANIES_FILE` and `OVERRIDES_FILE` are optional (see `.env.example`).
 
 ## Ask it something

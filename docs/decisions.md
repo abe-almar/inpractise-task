@@ -135,8 +135,9 @@ that day. Evidence lives in `docs/evidence/`, review reports in `docs/review-evi
   passed (`sec-filings` exits 1 otherwise, which `make` reports as 2).
 - The compose database listens on localhost only, on port 25432, and `DB_PORT` moves it. 5432 is the port most likely
   to be taken already, and 25432 is outside the range systems hand out for outgoing connections. The default is written
-  in the Makefile and in `docker-compose.yml`; a test holds them equal. A database that cannot be reached is one line
-  naming the host and port, without the password, and exit 2, not a stack trace.
+  in the Makefile and in `docker-compose.yml`; a test holds them equal. A database that cannot be reached, or a
+  malformed URL, is one line and exit 2, not a stack trace: it names the host and port, masks the URL's password, and does
+  not quote a malformed string. `make` sets `DB_PORT` only when it supplies the database; with a `.env`, Docker reads it there.
 - Rejected: `make run` always calling `backfill`. It costs the same when nothing is pending, but it would repair a
   coverage gap by itself, and `history_gap` on a filer already read is meant to stay red until someone has looked.
   Rejected: `make` reading `.env`, as shell or with a grep. Either is a second reader that disagrees with the job's

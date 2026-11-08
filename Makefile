@@ -5,8 +5,9 @@
 # The job reads DATABASE_URL from the environment, then from .env. Only when there is neither does make supply the
 # database in docker-compose.yml, and only then does it start Docker. make never reads .env: the job is its one reader.
 # That database listens on localhost only, on this port; `DB_PORT=5433 make run` moves it, data included.
-export DB_PORT ?= 25432
 ifeq ($(origin DATABASE_URL)$(wildcard .env),undefined)
+override DB_PORT := $(or $(DB_PORT),25432)
+export DB_PORT
 export DATABASE_URL := postgresql://sec:sec@localhost:$(DB_PORT)/sec_filings
 START_DB := db
 endif

@@ -7,9 +7,9 @@ $ make run
 .venv/bin/pip install --quiet -e ".[dev]"
 
  Network clone_default Creating 
+ Volume clone_sec_filings_pgdata Creating 
+ Volume clone_sec_filings_pgdata Creating 
  Network clone_default Creating 
- Volume clone_sec_filings_pgdata Creating 
- Volume clone_sec_filings_pgdata Creating 
  Volume clone_sec_filings_pgdata Created 
  Volume clone_sec_filings_pgdata Created 
  Network clone_default Created 
@@ -20,9 +20,9 @@ $ make run
  Container clone-db-1 Started 
  Container clone-db-1 Waiting 
  Container clone-db-1 Healthy 
-run 1 (daily): status=ok filers=21/21 filings seen=1801 new=1800 relabelled=1800 requests=139 errors=0 duration=35s
+run 1 (daily): status=ok filers=21/21 filings seen=1801 new=1800 relabelled=1800 requests=139 errors=0 duration=52s
 [ok  ] run_complete: fetched and validated 21 of 21 filer pages
-[ok  ] http_health: 0 EDGAR errors, 0 retries, 35s of a 600s budget
+[ok  ] http_health: 0 EDGAR errors, 0 retries, 52s of a 600s budget
 [ok  ] tickers_resolved: every ticker is in company_tickers.json
 [ok  ] cik_changes_acknowledged: no ticker changed CIK
 [ok  ] fiscal_year_end_known: every filer has a fiscal year end
@@ -61,7 +61,7 @@ run 1 (daily): status=ok filers=21/21 filings seen=1801 new=1800 relabelled=1800
         ... 123 more
 RESULT: OK
 exit=0
-elapsed=46s
+elapsed=64s
 
 $ make run
  Container clone-db-1 Running 
@@ -169,7 +169,7 @@ $ make check
  Container clone-db-1 Running 
  Container clone-db-1 Waiting 
  Container clone-db-1 Healthy 
-latest run 2 (daily) started 2026-11-08 17:46 UTC status=ok filers=21/21 new filings=0 errors=0
+latest run 2 (daily) started 2026-11-08 18:06 UTC status=ok filers=21/21 new filings=0 errors=0
 [ok] ran_today: a successful run started today (UTC)
 [ok  ] run_complete: fetched and validated 21 of 21 filer pages
 [ok  ] http_health: 0 EDGAR errors, 0 retries, 5s of a 600s budget
@@ -211,12 +211,12 @@ exit=0
 elapsed=6s
 
 $ make test
-........................................................................ [ 23%]
-........................................................................ [ 46%]
-........................................................................ [ 69%]
-........................................................................ [ 93%]
-..ssssssssssssssss...                                                    [100%]
-293 passed, 16 skipped in 0.35s
+........................................................................ [ 22%]
+........................................................................ [ 45%]
+........................................................................ [ 68%]
+........................................................................ [ 91%]
+.......ssssssssssssssss...                                               [100%]
+298 passed, 16 skipped in 0.36s
 exit=0
 
 $ make test-db
@@ -224,7 +224,7 @@ $ make test-db
  Container clone-db-1 Waiting 
  Container clone-db-1 Healthy 
 ................                                                         [100%]
-16 passed in 3.25s
+16 passed in 2.94s
 exit=0
 
 $ make summary | wc -l
@@ -235,7 +235,7 @@ $ make summary | wc -l
 # ---------- what the database publishes
 $ docker compose port db 5432
 127.0.0.1:25432
-from this machine's network address: port 25432 (this database): not reachable (ConnectionRefusedError) | port 5432 (old all-interfaces binding, for contrast): reachable
+from this machine's network address: port 25432 (this database): not reachable (ConnectionRefusedError) | port 5432 (a container published on all interfaces, for contrast): reachable
 
 $ DB_PORT=25433 make run    # moves it; the data stays
 run 3 (daily): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 requests=22 errors=0 duration=5s
@@ -247,31 +247,55 @@ run 4 (daily): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 reques
 RESULT: OK
 127.0.0.1:25432
 
+$ DB_PORT= make run    # an empty value means the default, for the job and for Docker alike
+run 5 (daily): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 requests=22 errors=0 duration=5s
+RESULT: OK
+127.0.0.1:25432
+
 $ DB_PORT=25435 make run    # with another program holding 25435
 Error response from daemon: ports are not available: exposing port TCP 127.0.0.1:25435 -> 127.0.0.1:0: listen tcp4 127.0.0.1:25435: bind: address alre
 make: *** [db] Error 1
 $ make run    # the default again
-run 5 (daily): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 requests=22 errors=0 duration=5s
-RESULT: OK
-
-$ DATABASE_URL=postgresql://sec:s3cret@127.0.0.1:1/sec_filings make run    # a database that cannot be reached
-error: cannot connect to the database at 127.0.0.1:1 (connection failed: connection to server at "127.0.0.1", port 1 failed: could not receive data from server: Connection refused). Is it running? If another program holds that port, `DB_PORT=<free port> make r
-make: *** [run] Error 2
-password printed: 0
-
-# ---------- Linux (python:3.12-slim, GNU Make 4), DATABASE_URL set, on the database's own Docker network
-GNU Make 4.4.1
-293 passed, 16 skipped in 0.74s
-16 passed in 1.51s
 run 6 (daily): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 requests=22 errors=0 duration=5s
 RESULT: OK
 
+# ---------- the database cannot be reached, or the URL is malformed
+$ DATABASE_URL=postgresql://sec:s3cret@127.0.0.1:1/sec_filings make run
+error: cannot connect to the database at 127.0.0.1:1 (connection failed: connection to server at "127.0.0.1", port 1 failed: could not receive data from server: Connection refused). Is it running? If another program holds that port, `DB_PORT=<free port> make run` moves the local 
+make: *** [run] Error 2
+$ DATABASE_URL="not a url, password s3cret" make run
+error: DATABASE_URL is not a valid connection string
+make: *** [run] Error 2
+$ DATABASE_URL=postgresql://sec:wr0ngpass@localhost:25432/sec_filings make summary    # what another Postgres on the port looks like
+error: cannot connect to the database at localhost:25432 (connection failed: connection to server at "127.0.0.1", port 25432 failed: FATAL: password authentication failed for user "sec"). Is it running? If another program holds that port, `DB_PORT=<free port> make run` moves the 
+make: *** [summary] Error 2
+password printed in any of these: 0
+
+# ---------- the port make and Docker agree on (GNU Make 3.81)
+nothing set                         job URL=postgresql://sec:sec@localhost:25432/sec_filings  compose DB_PORT=25432
+DB_PORT=5433 (environment)          job URL=postgresql://sec:sec@localhost:5433/sec_filings  compose DB_PORT=5433
+DB_PORT= (empty, environment)       job URL=postgresql://sec:sec@localhost:25432/sec_filings  compose DB_PORT=25432
+DB_PORT= (empty, command line)      job URL=postgresql://sec:sec@localhost:25432/sec_filings  compose DB_PORT=25432
+.env with DB_PORT and a matching URLjob URL=  compose DB_PORT=
+  Docker, through make db           published:5433
+
+# ---------- Linux (python:3.12-slim, GNU Make 4), DATABASE_URL set, on the database's own Docker network
+GNU Make 4.4.1
+298 passed, 16 skipped in 0.74s
+16 passed in 1.53s
+run 7 (daily): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 requests=22 errors=0 duration=5s
+RESULT: OK
+[nothing set]                 job URL=postgresql://sec:sec@localhost:25432/sec_filings  compose DB_PORT=25432
+[DB_PORT=5433]                job URL=postgresql://sec:sec@localhost:5433/sec_filings  compose DB_PORT=5433
+[DB_PORT=]                    job URL=postgresql://sec:sec@localhost:25432/sec_filings  compose DB_PORT=25432
+[command line DB_PORT=]       job URL=postgresql://sec:sec@localhost:25432/sec_filings  compose DB_PORT=25432
+
 $ make backfill    # nothing pending: costs the same as a morning run
-run 7 (backfill): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 requests=22 errors=0 duration=5s
+run 8 (backfill): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 requests=22 errors=0 duration=5s
 RESULT: OK
 
 $ echo NVDA >> companies.csv && make run    # adding a company is one line
-run 8 (daily): status=ok filers=22/22 filings seen=676 new=118 relabelled=118 requests=25 errors=0 duration=5s
+run 9 (daily): status=ok filers=22/22 filings seen=676 new=118 relabelled=118 requests=25 errors=0 duration=5s
 [FAIL] labels_match_sec: 25 real disagreement(s) with the SEC's XBRL label on 1086 filings compared; 1 XBRL filing(s) older than 21 days still without a SEC label; 101 are documented naming convention
 RESULT: ATTENTION NEEDED
 
@@ -280,7 +304,7 @@ $ make report TICKER=NVDA YEAR=2005    # older than NVDA's recent page
   "filing_date": "2005-03-22",
 
 $ make run    # the history is read once
-run 9 (daily): status=ok filers=22/22 filings seen=582 new=0 relabelled=0 requests=23 errors=0 duration=5s
+run 10 (daily): status=ok filers=22/22 filings seen=582 new=0 relabelled=0 requests=23 errors=0 duration=5s
 [FAIL] labels_match_sec: 25 real disagreement(s) with the SEC's XBRL label on 1086 filings compared; 1 XBRL filing(s) older than 21 days still without a SEC label; 101 are documented naming convention
 RESULT: ATTENTION NEEDED
 
@@ -313,7 +337,7 @@ make: *** [test-db] Error 127
 # ---------- a machine whose only Python is python3 (no python3.12 on the PATH)
 no python3.12
 Python 3.14.6
-293 passed, 16 skipped in 2.05s
+298 passed, 16 skipped in 2.23s
 
 # ---------- an interpreter that is too old, and one that does not exist
 $ PYTHON=/usr/bin/python3 make run

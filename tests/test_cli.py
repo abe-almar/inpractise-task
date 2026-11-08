@@ -8,7 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from sec_filings import cli
+import psycopg
+
+from sec_filings import cli, db
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -33,9 +35,42 @@ def test_an_unreachable_database_is_one_line_not_a_traceback(command, monkeypatc
     assert "s3cret" not in lines[0]
 
 
+def _driver_says(monkeypatch, text: str) -> None:
+    def refuse(*args, **kwargs):
+        raise psycopg.OperationalError(text)
+    monkeypatch.setattr(db.psycopg, "connect", refuse)
+
+
+def test_the_message_masks_a_password_the_driver_repeats(monkeypatch):
+    _driver_says(monkeypatch, "bad login with password s3cret\nsecond line s3cret")
+    with pytest.raises(db.DatabaseUnavailable) as caught:
+        db.connect("postgresql://sec:s3cret@db.example:5433/filings")
+    assert "at db.example:5433 (bad login with password ***)" in str(caught.value)
+    assert "s3cret" not in str(caught.value) and "\n" not in str(caught.value)
+    assert caught.value.__suppress_context__        # the driver's text does not come back through the traceback
+
+
+@pytest.mark.parametrize("url, where", [
+    ("postgresql:///filings", "default host:default port"),            # libpq's own defaults, which may be PGHOST and PGPORT
+    ("hostaddr=192.0.2.1 dbname=filings", "192.0.2.1:default port"),
+    ("postgresql://sec@bad%0Ahost:1/filings", "bad host:1"),           # the message stays on one line
+])
+def test_the_message_does_not_invent_an_address(monkeypatch, url, where):
+    _driver_says(monkeypatch, "refused")
+    with pytest.raises(db.DatabaseUnavailable) as caught:
+        db.connect(url)
+    assert f"at {where} (refused)" in str(caught.value) and "\n" not in str(caught.value)
+
+
+def test_a_malformed_url_is_reported_without_quoting_it():
+    with pytest.raises(db.DatabaseUnavailable, match="^DATABASE_URL is not a valid connection string$") as caught:
+        db.connect("not a url, password s3cret")
+    assert caught.value.__suppress_context__
+
+
 def test_the_local_database_has_one_default_port_and_listens_on_localhost_only():
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-    default = re.search(r"^export DB_PORT \?= (\d+)$", makefile, re.M).group(1)
+    default = re.search(r"^override DB_PORT := \$\(or \$\(DB_PORT\),(\d+)\)$", makefile, re.M).group(1)
     assert "postgresql://sec:sec@localhost:$(DB_PORT)/sec_filings" in makefile
     assert f'"127.0.0.1:${{DB_PORT:-{default}}}:5432"' in (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
     assert f"DATABASE_URL=postgresql://sec:sec@localhost:{default}/sec_filings" in (ROOT / ".env.example").read_text(encoding="utf-8")

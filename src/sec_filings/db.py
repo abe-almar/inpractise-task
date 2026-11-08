@@ -16,20 +16,28 @@ MIGRATION_LOCK = 727401  # arbitrary advisory-lock key so two runs never migrate
 
 
 class DatabaseUnavailable(RuntimeError):
-    """The database cannot be reached. The message is one line, fit to print, and never carries the password."""
+    """The database cannot be reached. The message is one line, fit to print, with the URL's password masked."""
 
 
 def connect(database_url: str) -> psycopg.Connection:
     try:
         return psycopg.connect(database_url, row_factory=dict_row)
+    except psycopg.ProgrammingError:   # the driver's text would quote the string, password included
+        raise DatabaseUnavailable("DATABASE_URL is not a valid connection string") from None
     except psycopg.OperationalError as exc:
-        info = conninfo_to_dict(database_url)
-        where = f"{info.get('host', 'localhost')}:{info.get('port', 5432)}"
-        reason = str(exc).partition("\n")[0]
-        raise DatabaseUnavailable(
-            f"cannot connect to the database at {where} ({reason}). Is it running? "
-            "If another program holds that port, `DB_PORT=<free port> make run` moves the local database."
-        ) from exc
+        raise DatabaseUnavailable(_unreachable_message(database_url, exc)) from None
+
+
+def _unreachable_message(database_url: str, exc: psycopg.OperationalError) -> str:
+    info = conninfo_to_dict(database_url)
+    host = info.get("host") or info.get("hostaddr") or "default host"
+    port = info.get("port") or "default port"
+    reason = str(exc).partition("\n")[0]
+    if info.get("password"):
+        reason = reason.replace(info["password"], "***")
+    message = (f"cannot connect to the database at {host}:{port} ({reason}). Is it running? "
+               "If another program holds that port, `DB_PORT=<free port> make run` moves the local database.")
+    return " ".join(message.split())
 
 
 def migrate(conn: psycopg.Connection) -> list[str]:
