@@ -133,15 +133,24 @@ that day. Evidence lives in `docs/evidence/`, review reports in `docs/review-evi
 - Prefect shape without Prefect: `sec_filings.flow.daily_run(settings, mode)` is a plain function; the README shows
   the six-line wrapper. The exit code is the contract with the scheduler: 0 only when the run and every hard check
   passed (`sec-filings` exits 1 otherwise, which `make` reports as 2).
+- The compose database listens on localhost only, on port 25432, and `DB_PORT` moves it. 5432 is the port most likely
+  to be taken already, and 25432 is outside the range systems hand out for outgoing connections. The default is written
+  in the Makefile and in `docker-compose.yml`; a test holds them equal. A database that cannot be reached is one line
+  naming the host and port, without the password, and exit 2, not a stack trace.
 - Rejected: `make run` always calling `backfill`. It costs the same when nothing is pending, but it would repair a
   coverage gap by itself, and `history_gap` on a filer already read is meant to stay red until someone has looked.
   Rejected: `make` reading `.env`, as shell or with a grep. Either is a second reader that disagrees with the job's
   (spaces, `&`, a leading tab), and in review passes 7 and 8 a line it misread fell through to the local database: a
-  green run against the wrong one.
-- Check: `docs/evidence/make-run-clean-clone-2026-11-08.log`; `test_a_first_daily_run_loads_the_whole_history`.
+  green run against the wrong one. Rejected: choosing a free port at run time. It can change between runs, which breaks
+  the stable address a scheduler, `psql` and the docs rely on, and `make` would need more logic to learn which it got.
+- Check: `docs/evidence/make-run-clean-clone-2026-11-08.log` (run with another Postgres on 5432);
+  `test_a_first_daily_run_loads_the_whole_history`; `tests/test_cli.py`.
 - History (2026-11-08): `backfill` used to be a separate first step. Trying `make run` on an empty database showed
   that a plain `run` ended `RESULT: OK` with 557 of 1,800 filings and no Apple 2009: every filer got a watermark from
   its recent page, so no check could tell. Forgetting `backfill` after adding a company did the same to that company.
+- History (2026-11-08): the first run on a second machine found 5432 taken by an editor's port forward. Docker left the
+  container healthy but unpublished, and the job ended in a stack trace that never mentioned the port. Once the port was
+  free that machine gave the expected results on Python 3.14: 1,800 filings, then `new=0` with 22 requests, tests green.
 
 ## D9. The morning check
 

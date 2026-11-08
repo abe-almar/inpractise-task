@@ -36,7 +36,8 @@ conventions included: a company counts as "naming its year by the start" only wh
 
 1. The scheduler runs `make run` and gets exit code 0 or non-zero.
 2. On non-zero, the alert carries the printed report. The first line gives the run id, filers fetched and validated,
-   new filings and requests; each check follows with its items. `make check` reprints it later.
+   new filings and requests; each check follows with its items. `make check` reprints it later. If the database
+   cannot be reached there is no run and no report, only one `error:` line naming the host and port.
 3. On 0, nobody has to look. The `news` line says what came in ("2 new filings, of which 1 amendment"), and whether
    the SEC labels of the filers with news were refreshed for the cross-check.
 

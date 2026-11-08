@@ -7,6 +7,7 @@ import logging
 from importlib import resources
 
 import psycopg
+from psycopg.conninfo import conninfo_to_dict
 from psycopg.rows import dict_row
 
 log = logging.getLogger(__name__)
@@ -14,8 +15,21 @@ log = logging.getLogger(__name__)
 MIGRATION_LOCK = 727401  # arbitrary advisory-lock key so two runs never migrate at once
 
 
+class DatabaseUnavailable(RuntimeError):
+    """The database cannot be reached. The message is one line, fit to print, and never carries the password."""
+
+
 def connect(database_url: str) -> psycopg.Connection:
-    return psycopg.connect(database_url, row_factory=dict_row)
+    try:
+        return psycopg.connect(database_url, row_factory=dict_row)
+    except psycopg.OperationalError as exc:
+        info = conninfo_to_dict(database_url)
+        where = f"{info.get('host', 'localhost')}:{info.get('port', 5432)}"
+        reason = str(exc).partition("\n")[0]
+        raise DatabaseUnavailable(
+            f"cannot connect to the database at {where} ({reason}). Is it running? "
+            "If another program holds that port, `DB_PORT=<free port> make run` moves the local database."
+        ) from exc
 
 
 def migrate(conn: psycopg.Connection) -> list[str]:

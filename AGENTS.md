@@ -24,9 +24,10 @@ make verify-labels                             # loads the SEC's XBRL labels; ex
 ```
 
 `make help` lists every target; each is a thin wrapper over `.venv/bin/sec-filings`. With no `DATABASE_URL` in the
-environment and no `.env` file, `make` uses the Postgres in `docker-compose.yml` and starts it; otherwise the job uses
-what you set, and `make db` starts the compose one by hand. If `.venv` is broken (the repository moved, say), delete it and the next `make` rebuilds it. If `run` ends
-with `RESULT: ATTENTION NEEDED`, read the `[FAIL]` lines; section 5 says what each means.
+environment and no `.env` file, `make` uses the Postgres in `docker-compose.yml` and starts it, on localhost only, port
+25432 (`DB_PORT=5433 make run` moves it, data included); otherwise the job uses what you set, and `make db` starts the
+compose one by hand. If `.venv` is broken (the repository moved, say), delete it and the next `make` rebuilds it. If
+`run` ends with `RESULT: ATTENTION NEEDED`, read the `[FAIL]` lines; section 5 says what each means.
 Counts in this kit (20 companies, 21 CIKs, 22 requests) describe the original list; yours follow `companies.csv`
 and the CIKs in `overrides.toml`.
 
@@ -115,6 +116,11 @@ reads an inactive company's filings, so clear or accept its open findings before
 
 `make check` reprints the latest run's stored checks without fetching or re-evaluating, and fails
 if no successful run started today (UTC). Use it when the scheduler's log is gone.
+
+`error: cannot connect to the database at HOST:PORT` means the run never started: there is no `runs` row and no checks.
+Docker saying `Healthy` does not rule it out, because that check runs inside the container. If another program held the
+port when the container started, `DB_PORT=<free port> make run` moves the database. On a second machine, with the port
+freed afterwards, the container stayed unreachable until `docker compose up -d --force-recreate db`.
 
 ## 6. Changing the labelling rule
 

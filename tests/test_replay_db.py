@@ -1,7 +1,7 @@
 """Replay tests (docs/decisions.md D5 and D10) against a fresh Postgres schema with a fake EDGAR client that serves
 the trimmed real pages in tests/fixtures. Runs only when TEST_DATABASE_URL is set, for example
 
-    TEST_DATABASE_URL=postgresql://sec:sec@localhost:5432/sec_filings pytest tests/test_replay_db.py
+    TEST_DATABASE_URL=postgresql://sec:sec@localhost:25432/sec_filings pytest tests/test_replay_db.py
 
 No network: every page, and every companyfacts document, comes from the fixtures or from this file."""
 
@@ -28,7 +28,7 @@ from conftest import FIXTURE_FILES, TRACKED_FORMS, all_fixtures, load_fixture
 DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "").strip()
 pytestmark = pytest.mark.skipif(
     not DATABASE_URL,
-    reason="set TEST_DATABASE_URL (e.g. postgresql://sec:sec@localhost:5432/sec_filings) to run the Postgres replay test",
+    reason="set TEST_DATABASE_URL (e.g. postgresql://sec:sec@localhost:25432/sec_filings) to run the Postgres replay test",
 )
 
 TODAY = date(2026, 11, 7)          # the day the fixtures were fetched; fixed so the overdue check is deterministic

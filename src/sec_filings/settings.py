@@ -48,7 +48,7 @@ class Settings:
         url = env.get("DATABASE_URL", "").strip()
         if not url:
             raise SettingsError(
-                "DATABASE_URL is not set. Example: export DATABASE_URL=postgresql://sec:sec@localhost:5432/sec_filings"
+                "DATABASE_URL is not set. Example: export DATABASE_URL=postgresql://sec:sec@localhost:25432/sec_filings"
             )
         user_agent = env.get("SEC_USER_AGENT", DEFAULT_USER_AGENT).strip()
         if "@" not in user_agent:

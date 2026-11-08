@@ -1,5 +1,5 @@
-# make run from a copy holding only what git tracks: no .venv, no .env, no DATABASE_URL, a new database volume.
-# Taken 2026-11-08 with the existing database stopped. INFO lines and pip's upgrade notice removed.
+# make run from a copy holding only what git tracks: no .venv, no .env, no DATABASE_URL, a new database volume,
+# with another Postgres already on port 5432. Taken 2026-11-08. INFO lines and pip's upgrade notice removed.
 state before: .venv absent, .env absent, DATABASE_URL ''
 
 $ make run
@@ -7,9 +7,9 @@ $ make run
 .venv/bin/pip install --quiet -e ".[dev]"
 
  Network clone_default Creating 
- Volume clone_sec_filings_pgdata Creating 
- Volume clone_sec_filings_pgdata Creating 
  Network clone_default Creating 
+ Volume clone_sec_filings_pgdata Creating 
+ Volume clone_sec_filings_pgdata Creating 
  Volume clone_sec_filings_pgdata Created 
  Volume clone_sec_filings_pgdata Created 
  Network clone_default Created 
@@ -20,9 +20,9 @@ $ make run
  Container clone-db-1 Started 
  Container clone-db-1 Waiting 
  Container clone-db-1 Healthy 
-run 1 (daily): status=ok filers=21/21 filings seen=1801 new=1800 relabelled=1800 requests=139 errors=0 duration=40s
+run 1 (daily): status=ok filers=21/21 filings seen=1801 new=1800 relabelled=1800 requests=139 errors=0 duration=35s
 [ok  ] run_complete: fetched and validated 21 of 21 filer pages
-[ok  ] http_health: 0 EDGAR errors, 0 retries, 40s of a 600s budget
+[ok  ] http_health: 0 EDGAR errors, 0 retries, 35s of a 600s budget
 [ok  ] tickers_resolved: every ticker is in company_tickers.json
 [ok  ] cik_changes_acknowledged: no ticker changed CIK
 [ok  ] fiscal_year_end_known: every filer has a fiscal year end
@@ -61,15 +61,15 @@ run 1 (daily): status=ok filers=21/21 filings seen=1801 new=1800 relabelled=1800
         ... 123 more
 RESULT: OK
 exit=0
-elapsed=51s
+elapsed=46s
 
 $ make run
  Container clone-db-1 Running 
  Container clone-db-1 Waiting 
  Container clone-db-1 Healthy 
-run 2 (daily): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 requests=22 errors=0 duration=6s
+run 2 (daily): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 requests=22 errors=0 duration=5s
 [ok  ] run_complete: fetched and validated 21 of 21 filer pages
-[ok  ] http_health: 0 EDGAR errors, 0 retries, 6s of a 600s budget
+[ok  ] http_health: 0 EDGAR errors, 0 retries, 5s of a 600s budget
 [ok  ] tickers_resolved: every ticker is in company_tickers.json
 [ok  ] cik_changes_acknowledged: no ticker changed CIK
 [ok  ] fiscal_year_end_known: every filer has a fiscal year end
@@ -97,7 +97,7 @@ run 2 (daily): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 reques
 [info] news: 0 new filing(s) this run, of which 0 amendment(s) or late-filing notice(s)
 RESULT: OK
 exit=0
-elapsed=7s
+elapsed=6s
 
 $ make report TICKER=AAPL YEAR=2009 PERIOD=FY
  Container clone-db-1 Running 
@@ -169,10 +169,10 @@ $ make check
  Container clone-db-1 Running 
  Container clone-db-1 Waiting 
  Container clone-db-1 Healthy 
-latest run 2 (daily) started 2026-11-08 10:36 UTC status=ok filers=21/21 new filings=0 errors=0
+latest run 2 (daily) started 2026-11-08 17:46 UTC status=ok filers=21/21 new filings=0 errors=0
 [ok] ran_today: a successful run started today (UTC)
 [ok  ] run_complete: fetched and validated 21 of 21 filer pages
-[ok  ] http_health: 0 EDGAR errors, 0 retries, 6s of a 600s budget
+[ok  ] http_health: 0 EDGAR errors, 0 retries, 5s of a 600s budget
 [ok  ] tickers_resolved: every ticker is in company_tickers.json
 [ok  ] cik_changes_acknowledged: no ticker changed CIK
 [ok  ] fiscal_year_end_known: every filer has a fiscal year end
@@ -208,15 +208,15 @@ $ make verify-labels
 {"labels_stored": 1017, "compared": 1017, "raw_disagreements": 105, "filers_without_xbrl": []}
 [info] labels_match_sec: 4 real disagreement(s) with the SEC's XBRL label on 1017 filings compared; 1 XBRL filing(s) older than 21 days still without a SEC label; 101 are documented naming conventions (GME 73, TM 8, WMT 20); 0 recent filing(s) awaiting one (all 5 accepted in overrides.toml)
 exit=0
-elapsed=8s
+elapsed=6s
 
 $ make test
 ........................................................................ [ 23%]
-........................................................................ [ 47%]
-........................................................................ [ 71%]
-...................................................................sssss [ 95%]
-sssssssssss...                                                           [100%]
-286 passed, 16 skipped in 0.33s
+........................................................................ [ 46%]
+........................................................................ [ 69%]
+........................................................................ [ 93%]
+..ssssssssssssssss...                                                    [100%]
+293 passed, 16 skipped in 0.35s
 exit=0
 
 $ make test-db
@@ -224,18 +224,54 @@ $ make test-db
  Container clone-db-1 Waiting 
  Container clone-db-1 Healthy 
 ................                                                         [100%]
-16 passed in 2.07s
+16 passed in 3.25s
 exit=0
 
 $ make summary | wc -l
       20
 
+# ---------- the test above ran with another Postgres already listening on 5432
+
+# ---------- what the database publishes
+$ docker compose port db 5432
+127.0.0.1:25432
+from this machine's network address: port 25432 (this database): not reachable (ConnectionRefusedError) | port 5432 (old all-interfaces binding, for contrast): reachable
+
+$ DB_PORT=25433 make run    # moves it; the data stays
+run 3 (daily): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 requests=22 errors=0 duration=5s
+RESULT: OK
+127.0.0.1:25433
+
+$ make run    # back on the default
+run 4 (daily): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 requests=22 errors=0 duration=5s
+RESULT: OK
+127.0.0.1:25432
+
+$ DB_PORT=25435 make run    # with another program holding 25435
+Error response from daemon: ports are not available: exposing port TCP 127.0.0.1:25435 -> 127.0.0.1:0: listen tcp4 127.0.0.1:25435: bind: address alre
+make: *** [db] Error 1
+$ make run    # the default again
+run 5 (daily): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 requests=22 errors=0 duration=5s
+RESULT: OK
+
+$ DATABASE_URL=postgresql://sec:s3cret@127.0.0.1:1/sec_filings make run    # a database that cannot be reached
+error: cannot connect to the database at 127.0.0.1:1 (connection failed: connection to server at "127.0.0.1", port 1 failed: could not receive data from server: Connection refused). Is it running? If another program holds that port, `DB_PORT=<free port> make r
+make: *** [run] Error 2
+password printed: 0
+
+# ---------- Linux (python:3.12-slim, GNU Make 4), DATABASE_URL set, on the database's own Docker network
+GNU Make 4.4.1
+293 passed, 16 skipped in 0.74s
+16 passed in 1.51s
+run 6 (daily): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 requests=22 errors=0 duration=5s
+RESULT: OK
+
 $ make backfill    # nothing pending: costs the same as a morning run
-run 3 (backfill): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 requests=22 errors=0 duration=5s
+run 7 (backfill): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 requests=22 errors=0 duration=5s
 RESULT: OK
 
 $ echo NVDA >> companies.csv && make run    # adding a company is one line
-run 4 (daily): status=ok filers=22/22 filings seen=676 new=118 relabelled=118 requests=25 errors=0 duration=5s
+run 8 (daily): status=ok filers=22/22 filings seen=676 new=118 relabelled=118 requests=25 errors=0 duration=5s
 [FAIL] labels_match_sec: 25 real disagreement(s) with the SEC's XBRL label on 1086 filings compared; 1 XBRL filing(s) older than 21 days still without a SEC label; 101 are documented naming convention
 RESULT: ATTENTION NEEDED
 
@@ -244,7 +280,7 @@ $ make report TICKER=NVDA YEAR=2005    # older than NVDA's recent page
   "filing_date": "2005-03-22",
 
 $ make run    # the history is read once
-run 5 (daily): status=ok filers=22/22 filings seen=582 new=0 relabelled=0 requests=23 errors=0 duration=5s
+run 9 (daily): status=ok filers=22/22 filings seen=582 new=0 relabelled=0 requests=23 errors=0 duration=5s
 [FAIL] labels_match_sec: 25 real disagreement(s) with the SEC's XBRL label on 1086 filings compared; 1 XBRL filing(s) older than 21 days still without a SEC label; 101 are documented naming convention
 RESULT: ATTENTION NEEDED
 
@@ -277,7 +313,7 @@ make: *** [test-db] Error 127
 # ---------- a machine whose only Python is python3 (no python3.12 on the PATH)
 no python3.12
 Python 3.14.6
-286 passed, 16 skipped in 2.27s
+293 passed, 16 skipped in 2.05s
 
 # ---------- an interpreter that is too old, and one that does not exist
 $ PYTHON=/usr/bin/python3 make run
@@ -291,10 +327,3 @@ nothing created
 # ---------- a deleted CLI is rebuilt
 rebuild exit=0
 .venv/bin/sec-filings
-
-# ---------- Linux (python:3.12-slim, GNU Make 4), DATABASE_URL set, so no Docker inside the container
-GNU Make 4.4.1
-286 passed, 16 skipped in 0.69s
-16 passed in 3.30s
-run 7 (daily): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 requests=22 errors=0 duration=5s
-RESULT: OK
