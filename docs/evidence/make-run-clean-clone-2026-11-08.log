@@ -3,7 +3,7 @@
 state before: .venv absent, .env absent, DATABASE_URL ''
 
 $ make run
-/opt/homebrew/bin/python3.12 -m venv --clear .venv
+"/opt/homebrew/bin/python3.12" -m venv --clear .venv
 .venv/bin/pip install --quiet -e ".[dev]"
 
  Network clone_default Creating 
@@ -20,9 +20,9 @@ $ make run
  Container clone-db-1 Started 
  Container clone-db-1 Waiting 
  Container clone-db-1 Healthy 
-run 1 (daily): status=ok filers=21/21 filings seen=1801 new=1800 relabelled=1800 requests=139 errors=0 duration=43s
+run 1 (daily): status=ok filers=21/21 filings seen=1801 new=1800 relabelled=1800 requests=139 errors=0 duration=40s
 [ok  ] run_complete: fetched and validated 21 of 21 filer pages
-[ok  ] http_health: 0 EDGAR errors, 0 retries, 43s of a 600s budget
+[ok  ] http_health: 0 EDGAR errors, 0 retries, 40s of a 600s budget
 [ok  ] tickers_resolved: every ticker is in company_tickers.json
 [ok  ] cik_changes_acknowledged: no ticker changed CIK
 [ok  ] fiscal_year_end_known: every filer has a fiscal year end
@@ -61,15 +61,15 @@ run 1 (daily): status=ok filers=21/21 filings seen=1801 new=1800 relabelled=1800
         ... 123 more
 RESULT: OK
 exit=0
-elapsed=56s
+elapsed=51s
 
 $ make run
  Container clone-db-1 Running 
  Container clone-db-1 Waiting 
  Container clone-db-1 Healthy 
-run 2 (daily): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 requests=22 errors=0 duration=5s
+run 2 (daily): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 requests=22 errors=0 duration=6s
 [ok  ] run_complete: fetched and validated 21 of 21 filer pages
-[ok  ] http_health: 0 EDGAR errors, 0 retries, 5s of a 600s budget
+[ok  ] http_health: 0 EDGAR errors, 0 retries, 6s of a 600s budget
 [ok  ] tickers_resolved: every ticker is in company_tickers.json
 [ok  ] cik_changes_acknowledged: no ticker changed CIK
 [ok  ] fiscal_year_end_known: every filer has a fiscal year end
@@ -169,10 +169,10 @@ $ make check
  Container clone-db-1 Running 
  Container clone-db-1 Waiting 
  Container clone-db-1 Healthy 
-latest run 2 (daily) started 2026-11-08 10:19 UTC status=ok filers=21/21 new filings=0 errors=0
+latest run 2 (daily) started 2026-11-08 10:36 UTC status=ok filers=21/21 new filings=0 errors=0
 [ok] ran_today: a successful run started today (UTC)
 [ok  ] run_complete: fetched and validated 21 of 21 filer pages
-[ok  ] http_health: 0 EDGAR errors, 0 retries, 5s of a 600s budget
+[ok  ] http_health: 0 EDGAR errors, 0 retries, 6s of a 600s budget
 [ok  ] tickers_resolved: every ticker is in company_tickers.json
 [ok  ] cik_changes_acknowledged: no ticker changed CIK
 [ok  ] fiscal_year_end_known: every filer has a fiscal year end
@@ -208,7 +208,7 @@ $ make verify-labels
 {"labels_stored": 1017, "compared": 1017, "raw_disagreements": 105, "filers_without_xbrl": []}
 [info] labels_match_sec: 4 real disagreement(s) with the SEC's XBRL label on 1017 filings compared; 1 XBRL filing(s) older than 21 days still without a SEC label; 101 are documented naming conventions (GME 73, TM 8, WMT 20); 0 recent filing(s) awaiting one (all 5 accepted in overrides.toml)
 exit=0
-elapsed=5s
+elapsed=8s
 
 $ make test
 ........................................................................ [ 23%]
@@ -255,13 +255,21 @@ RESULT: ATTENTION NEEDED
 nothing set                                   starts compose
 environment                                   no docker
 .env with spaces (not valid shell)            no docker
-    the job tried: remote.example.invalid
+    the job: remote.example.invalid
 .env unquoted & (shell would drop it)         no docker
-    the job tried: remote.example.invalid
+    the job: remote.example.invalid
 .env with export                              no docker
-    the job tried: remote.example.invalid
-.env, only commented out                      starts compose
-.env copied from the example                  starts compose
+    the job: remote.example.invalid
+.env with a leading tab                       no docker
+    the job: remote.example.invalid
+.env, export then a tab                       no docker
+    the job: remote.example.invalid
+.env, only commented out                      no docker
+    the job: DATABASE_URL is not set
+.env with a similar key only                  no docker
+    the job: DATABASE_URL is not set
+.env copied from the example                  no docker
+    make summary lines: 21
 $ make test-db    # the URL lives only in .env: must fail, not skip
 /bin/sh: DATABASE_URL: this target needs DATABASE_URL in the environment, .env is not enough
 make: *** [test-db] Error 127
@@ -269,12 +277,15 @@ make: *** [test-db] Error 127
 # ---------- a machine whose only Python is python3 (no python3.12 on the PATH)
 no python3.12
 Python 3.14.6
-286 passed, 16 skipped in 1.98s
+286 passed, 16 skipped in 2.27s
 
-# ---------- an interpreter that is too old
+# ---------- an interpreter that is too old, and one that does not exist
 $ PYTHON=/usr/bin/python3 make run
-Python 3.12+ is needed, /Library/Developer/CommandLineTools/usr/bin/python3 is 3.9.6: set PYTHON to a newer one
+Python 3.12+ is needed, /usr/bin/python3 is 3.9.6: set PYTHON to a newer one
 make: *** [.venv/bin/sec-filings] Error 1
+$ PYTHON=/no/such/python make run
+/bin/sh: /no/such/python: No such file or directory
+make: *** [.venv/bin/sec-filings] Error 127
 nothing created
 
 # ---------- a deleted CLI is rebuilt
@@ -283,7 +294,7 @@ rebuild exit=0
 
 # ---------- Linux (python:3.12-slim, GNU Make 4), DATABASE_URL set, so no Docker inside the container
 GNU Make 4.4.1
-286 passed, 16 skipped in 0.70s
-16 passed in 3.28s
-run 5 (daily): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 requests=22 errors=0 duration=5s
+286 passed, 16 skipped in 0.69s
+16 passed in 3.30s
+run 7 (daily): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 requests=22 errors=0 duration=5s
 RESULT: OK

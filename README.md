@@ -19,8 +19,9 @@ when the run and every hard check passed. The first run reads every filer's whol
 a minute), as does the first run after adding a company, for that company; other runs read one page per CIK (about 22
 requests, a few seconds). Running it twice in a morning changes nothing.
 
-The job reads its connection from `DATABASE_URL`, in the environment or in a `.env` file. If neither mentions it,
-`make` supplies the database in `docker-compose.yml`, and that is the only case in which it starts Docker. `SEC_USER_AGENT`,
+The job reads its connection from `DATABASE_URL`, in the environment or in a `.env` file. With neither, `make` supplies
+the database in `docker-compose.yml`, and that is the only case in which it starts Docker (`make db` starts it by hand).
+`SEC_USER_AGENT`,
 `SEC_RATE_LIMIT_PER_SEC`, `COMPANIES_FILE` and `OVERRIDES_FILE` are optional (see `.env.example`).
 
 ## Ask it something

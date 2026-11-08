@@ -2,10 +2,9 @@
 # everything the first time and only what is new after that. Safe to call every morning; a non-zero exit means the
 # run or a hard check failed. Every target is a thin wrapper over the `sec-filings` command (src/sec_filings/cli.py).
 
-# The job reads DATABASE_URL from the environment, then from .env. Only when neither mentions it does make supply the
-# database in docker-compose.yml, and only then does it start Docker.
-URL_IN_DOTENV := $(shell grep -sE '^ *(export +)?DATABASE_URL' .env)
-ifeq ($(origin DATABASE_URL)$(URL_IN_DOTENV),undefined)
+# The job reads DATABASE_URL from the environment, then from .env. Only when there is neither does make supply the
+# database in docker-compose.yml, and only then does it start Docker. make never reads .env: the job is its one reader.
+ifeq ($(origin DATABASE_URL)$(wildcard .env),undefined)
 export DATABASE_URL := postgresql://sec:sec@localhost:5432/sec_filings
 START_DB := db
 endif
@@ -48,10 +47,10 @@ test-db: setup $(START_DB)  ## The replay tests against Postgres (each in its ow
 setup: $(CLI)  ## Create the virtualenv and install; does nothing when already done
 
 $(CLI): pyproject.toml
-	@$(PYTHON) -c 'import sys; sys.exit(sys.version_info < (3, 12) and f"Python 3.12+ is needed, {sys.executable} is {sys.version.split()[0]}: set PYTHON to a newer one")'
-	$(PYTHON) -m venv --clear .venv
+	@"$(PYTHON)" -c 'import sys; sys.exit(sys.version_info < (3, 12) and "Python 3.12+ is needed, %s is %s: set PYTHON to a newer one" % (sys.executable, sys.version.split()[0]))'
+	"$(PYTHON)" -m venv --clear .venv
 	.venv/bin/pip install --quiet -e ".[dev]"
 	@touch $@
 
-db:  ## Start the database in docker-compose.yml (run does it unless DATABASE_URL is set)
+db:  ## Start the database in docker-compose.yml (run does it when there is no DATABASE_URL and no .env)
 	@docker compose up -d --wait --quiet-pull

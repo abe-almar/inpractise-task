@@ -93,6 +93,11 @@ that day. Evidence lives in `docs/evidence/`, review reports in `docs/review-evi
   page must hold exactly the filings the recent page advertised for it (all 96 real ones do). A failing page is
   recorded and fails `run_complete` without aborting the other filers; a filer whose history failed stays unread, and
   the next run reads all of it again.
+- Accepted limitation: a page with the right count is assumed to be the right page. Review pass 8 simulated EDGAR
+  serving page 24 under page 23's name, same count, and it passed; that has never been seen. The only available check
+  compares dates with the advertised range: `filingFrom` matches all 96 real pages, but `filingTo` is off on 92 of them,
+  so that metadata is too loose to rest a hard failure on, and a false alarm would block a filer's history with no way
+  round it.
 - A filing that disappears from the pages is never deleted: it gets `not_seen_since`, stays a hard finding until it
   reappears or a person accepts it (EDGAR does remove filings after acceptance). The comparison window is the page
   fetched plus where the previous fetch started, so the oldest filing on a page cannot vanish unnoticed.
@@ -122,16 +127,17 @@ that day. Evidence lives in `docs/evidence/`, review reports in `docs/review-evi
 
 - Python 3.12, `pyproject.toml`, console script `sec-filings` with `run`, `backfill [--full]`, `check`,
   `verify-labels`, `report`, `summary`, and a `Makefile` with one thin target for each. The README's one command is
-  `make run`, which works from a fresh clone: it starts the compose database if neither the environment nor `.env`
-  mentions `DATABASE_URL`, installs the job into `.venv` and calls `sec-filings run`. Only the job reads `.env`, so
+  `make run`, which works from a fresh clone: it starts the compose database if there is neither a `DATABASE_URL` in
+  the environment nor a `.env` file, installs the job into `.venv` and calls `sec-filings run`. Only the job reads `.env`, so
   one reader decides what it means. Adding a company is a line in `companies.csv`; the next run reads its history.
 - Prefect shape without Prefect: `sec_filings.flow.daily_run(settings, mode)` is a plain function; the README shows
   the six-line wrapper. The exit code is the contract with the scheduler: 0 only when the run and every hard check
   passed (`sec-filings` exits 1 otherwise, which `make` reports as 2).
 - Rejected: `make run` always calling `backfill`. It costs the same when nothing is pending, but it would repair a
   coverage gap by itself, and `history_gap` on a filer already read is meant to stay red until someone has looked.
-  Rejected: `make` sourcing `.env` as shell. Shell and the job's reader disagree on spaces and `&`, and in review pass 7
-  a value the shell could not read fell through to the local database: a green run against the wrong one.
+  Rejected: `make` reading `.env`, as shell or with a grep. Either is a second reader that disagrees with the job's
+  (spaces, `&`, a leading tab), and in review passes 7 and 8 a line it misread fell through to the local database: a
+  green run against the wrong one.
 - Check: `docs/evidence/make-run-clean-clone-2026-11-08.log`; `test_a_first_daily_run_loads_the_whole_history`.
 - History (2026-11-08): `backfill` used to be a separate first step. Trying `make run` on an empty database showed
   that a plain `run` ended `RESULT: OK` with 557 of 1,800 filings and no Apple 2009: every filer got a watermark from
