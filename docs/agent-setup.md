@@ -26,14 +26,5 @@ are in `docs/review-evidence/` and `docs/agent-runs/`.
 
 ## Session logs
 
-`agent-logs/` holds the transcripts, as the brief asks:
-
-- `agent-logs/claude-code/*.jsonl`: the Claude Code session that did the work, exported by the author with
-  `docs/evidence/tools/export_session_logs.py` before submission. The export strips the `<system-reminder>` blocks
-  the harness injects (per-machine memory and reminders unrelated to this task), replaces tool results that read
-  this machine's own memory files with a marker, and refuses to write a file that still contains a word from a
-  private blocklist; everything the agent read, wrote, ran and said about this task is intact.
-- `agent-logs/hermes/*.jsonl`: the Hermes sessions, exported with `hermes sessions export`: the blocked first
-  fresh-agent attempt, the fresh-agent run, the independent audit and the review passes. Two one-line smoke tests
-  made while the profiles were being set up are left out: they predate the memory scrub and carry nothing of value.
-- The sub-agent that wrote the tests ran inside the Claude Code session; its exchanges are part of that transcript.
+The session transcripts are not part of this submission. What the agents produced is: the review reports in
+`docs/review-evidence/`, the audit and the fresh-agent test in `docs/agent-runs/`, and the test suite.

@@ -183,22 +183,22 @@ that day. Evidence lives in `docs/evidence/`, review reports in `docs/review-evi
 - Claude Code orchestrated, researched and implemented, with a sub-agent for the tests. The Hermes profile
   `takehome` (gpt-6.1-sol) audited the table through a different EDGAR route (Atom feeds; 183 filings, MATCH) and,
   with no persona injected, played the fresh agent that must add five companies from the kit alone. The Hermes
-  profile `takehomereviewer` ran five adversarial passes (one full, four deltas): FAIL, FAIL, FAIL, FAIL, PASS. Session
-  exports are under `agent-logs/`; the setup is described in `docs/agent-setup.md`.
+  profile `takehomereviewer` ran nine adversarial passes: five on the build (FAIL, FAIL, FAIL, FAIL, PASS), one on the
+  simplification (PASS WITH FINDINGS), three on `make run` (FAIL, FAIL, PASS). The setup is described in
+  `docs/agent-setup.md`.
 
 ## D14. Repository layout
 
 ```
 README.md            one command, the example query, how a scheduler calls it, where each module lives
 AGENTS.md            the handover kit for any agent (decisions, checks, how to add a company, how to say "done")
-brief.md, companies.csv, overrides.toml, pyproject.toml, docker-compose.yml, .env.example
+Makefile, brief.md, companies.csv, overrides.toml, pyproject.toml, docker-compose.yml, .env.example
 src/sec_filings/     settings, edgar (client), fiscal (rule), db (schema), loader (EDGAR -> table), checks, flow, verify, report, cli
 src/sec_filings/sql/ 001_schema.sql
 tests/               unit, replay and cross-check tests with trimmed real fixtures
 docs/                this log, morning-check, what-i-didnt-trust, analyst-question, agent-setup, agent-personas
-docs/evidence/       probes, run logs, cover-page checks, tools; docs/review-evidence/ the five review reports;
+docs/evidence/       probes, run logs, cover-page checks, tools; docs/review-evidence/ the nine review reports;
                      docs/agent-runs/ the audit and the fresh-agent test
-agent-logs/          exported session transcripts
 ```
 
 ## D15. Corrections of EDGAR's own metadata are per filing, evidenced, and never silent

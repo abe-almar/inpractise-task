@@ -10,3 +10,5 @@ docs/agent-runs/.usage-*.json
 dist/
 build/
 docs/evidence/tools/export_blocklist.txt
+agent-logs/
+
