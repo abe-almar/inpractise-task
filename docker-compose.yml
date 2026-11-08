@@ -1,6 +1,5 @@
 # Local Postgres for the job. Any Postgres 14+ works; this is only the quickest way to get one.
-#   docker compose up -d
-#   export DATABASE_URL=postgresql://sec:sec@localhost:5432/sec_filings
+#   make db   (or simply make run, which starts it)
 services:
   db:
     image: postgres:17

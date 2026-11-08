@@ -266,8 +266,9 @@ def ingest_filer(
     if window_start and previous_start and previous_start < window_start:
         window_start = previous_start
 
-    # history is read once per filer, again when a coverage gap is on record, and for everyone on --full
-    read_history = backfill and (full or not filer.get("backfill_completed_at") or filer.get("coverage_gap_since"))
+    # A filer's history is read the first time it is seen, on any run, so a first run or a new company can never end
+    # green with only the recent page loaded. After that only `backfill` reads it: for a gap on record, or everyone on --full.
+    read_history = not filer.get("backfill_completed_at") or (backfill and (full or filer.get("coverage_gap_since")))
     pages = 1
     if read_history:
         for page in data.get("filings", {}).get("files", []) or []:
@@ -420,18 +421,18 @@ def _advance_coverage(conn: psycopg.Connection, cik: int, recent_window_start: d
     """The filer's coverage watermark (`coverage_through`: filings known complete through that date).
 
       history read                       -> coverage through today, any gap cleared, backfill marked done
-      no watermark yet                   -> starts today (a gap already on record stays until history is read)
       recent page overlaps the watermark -> coverage through today
       recent page starts after it        -> a gap is recorded (first date kept); the watermark does not move
 
-    Only a history read ever clears a gap, so a run that merely reached its checks cannot bridge one."""
+    Only a history read ever clears a gap, so a run that merely reached its checks cannot bridge one. A filer's first
+    run always reads its history, so every other case has a watermark to compare with."""
     with conn.cursor() as cur:
         cur.execute("SELECT coverage_through FROM filers WHERE cik = %s", (cik,))
-        through = (cur.fetchone() or {}).get("coverage_through")
+        through = cur.fetchone()["coverage_through"]
         if history_read:
             cur.execute("UPDATE filers SET recent_window_start = %s, coverage_through = %s, coverage_gap_since = NULL, "
                         "backfill_completed_at = now() WHERE cik = %s", (recent_window_start, today, cik))
-        elif through is None or recent_window_start is None or recent_window_start <= through:
+        elif recent_window_start is None or recent_window_start <= through:
             cur.execute("UPDATE filers SET recent_window_start = %s, coverage_through = %s WHERE cik = %s", (recent_window_start, today, cik))
         else:
             cur.execute("UPDATE filers SET recent_window_start = %s, coverage_gap_since = COALESCE(coverage_gap_since, %s) WHERE cik = %s",

@@ -5,35 +5,33 @@ the SEC, each labelled with the fiscal year and period it covers. Source: EDGAR'
 
 ## Run it
 
-You need Python 3.12+ and a Postgres database. The quickest local database is the one in `docker-compose.yml`.
+You need `make`, Python 3.12+ and Docker (no Docker if you bring your own Postgres, see below).
 
 ```bash
-docker compose up -d                                   # local Postgres 17 (skip if you have one)
-python3.12 -m venv .venv && .venv/bin/pip install -e .
-export DATABASE_URL=postgresql://sec:sec@localhost:5432/sec_filings
-.venv/bin/sec-filings backfill                         # first time: every history page, read once per filer; later only for new filers or gaps (--full: everyone)
+make run
 ```
 
-The one command the scheduler calls every morning:
+That is the one command, from a fresh clone and every morning after. It starts the local Postgres, installs the job
+into `.venv`, fetches the ticker map and the filings of every CIK, validates each page, upserts the filings, labels
+them, refreshes the SEC's own labels for filers with news, runs the morning checks, prints a report and exits 0 only
+when the run and every hard check passed. The first run reads every filer's whole history (about 140 requests, under
+a minute); later runs read one page per CIK (about 22 requests, a few seconds). Running it twice in a morning changes
+nothing.
 
-```bash
-.venv/bin/sec-filings run
-```
-
-It fetches the ticker map and the recent filings of every CIK (one request each, a few seconds), validates each
-page, upserts the filings, labels them, refreshes the SEC's own labels for filers with news, runs the morning checks,
-prints a report and exits 0 only when the run and every hard check passed. Running it twice in a morning changes nothing. `DATABASE_URL` is the only required setting; `SEC_USER_AGENT`,
-`SEC_RATE_LIMIT_PER_SEC`, `COMPANIES_FILE` and `OVERRIDES_FILE` are optional (see `.env.example`; a `.env` in the
-working directory is read).
+The job reads its connection from `DATABASE_URL`. `make` takes it from the environment, then from `.env`, and
+otherwise uses the database in `docker-compose.yml`, which is the only case in which it starts Docker. `SEC_USER_AGENT`,
+`SEC_RATE_LIMIT_PER_SEC`, `COMPANIES_FILE` and `OVERRIDES_FILE` are optional (see `.env.example`).
 
 ## Ask it something
 
 ```bash
-.venv/bin/sec-filings report AAPL 2009 FY      # what do we have for Apple's 2009 annual report? one row
-.venv/bin/sec-filings report WMT 2027 Q1       # a quarter (fiscal year = the calendar year in which the year ends)
-.venv/bin/sec-filings summary                  # one line per company
-.venv/bin/sec-filings check                    # the latest run's stored checks, no fetching, plus "did it run today"
-.venv/bin/sec-filings verify-labels            # reload the SEC's own XBRL labels for every filer; exit 1 on a real disagreement
+make report TICKER=AAPL YEAR=2009 PERIOD=FY    # what do we have for Apple's 2009 annual report? one row
+make report TICKER=WMT YEAR=2027 PERIOD=Q1     # a quarter (fiscal year = the calendar year in which the year ends)
+make summary                                   # one line per company
+make check                                     # the latest run's stored checks, no fetching, plus "did it run today"
+make verify-labels                             # reload the SEC's own XBRL labels for every filer; fails on a real disagreement
+make backfill                                  # re-read the history of filers with a coverage gap (FULL=1: of every filer)
+make help                                      # all of the above
 ```
 
 The same question in SQL, against the `reports` view (one row per company, family, fiscal year and period):
@@ -89,15 +87,15 @@ def sec_filings_daily() -> None:
         raise RuntimeError(f"run {result.run_id}: attention needed (see the checks table)")
 ```
 
-Or schedule the command itself (`sec-filings run`) and alert on a non-zero exit code. The morning check that tells a
-wrong run from a crashed one is described in `docs/morning-check.md`.
+Or schedule the command itself and alert on a non-zero exit code: `cd /path/to/repo && make run` (with `docker` on the
+scheduler's `PATH` if it uses the compose database). The morning check that tells a wrong run from a crashed one is
+described in `docs/morning-check.md`.
 
 ## Tests
 
 ```bash
-.venv/bin/pip install -e ".[dev]"
-.venv/bin/pytest -q                                                            # offline unit tests
-TEST_DATABASE_URL=postgresql://sec:sec@localhost:5432/sec_filings .venv/bin/pytest -q tests/test_replay_db.py  # idempotence, needs Postgres
+make test       # offline unit tests; the Postgres replay tests are skipped
+make test-db    # the replay tests (idempotence, outage recovery), each in its own throwaway schema
 ```
 
 ## How the code is organised
@@ -112,7 +110,7 @@ TEST_DATABASE_URL=postgresql://sec:sec@localhost:5432/sec_filings .venv/bin/pyte
 | `checks.py` | the sixteen morning checks, one function each |
 | `flow.py` | `daily_run`: the steps in order, the function a scheduler calls |
 | `verify.py` | the SEC's own XBRL labels, loaded for the cross-check |
-| `report.py`, `cli.py` | answers for humans and the `sec-filings` command |
+| `report.py`, `cli.py` | answers for humans and the `sec-filings` command, which the `Makefile` targets wrap |
 
 ## Where to read next
 

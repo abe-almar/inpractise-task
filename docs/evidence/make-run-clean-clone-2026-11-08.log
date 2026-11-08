@@ -1,0 +1,252 @@
+# make run from a copy holding only what git tracks: no .venv, no .env, no DATABASE_URL, a new database volume.
+# Taken 2026-11-08 with the existing database stopped. INFO lines and pip's upgrade notice removed.
+state before: .venv absent, .env absent, DATABASE_URL ''
+
+$ make run
+python3.12 -m venv .venv
+.venv/bin/pip install --quiet -e ".[dev]"
+
+ Volume clone_sec_filings_pgdata Creating 
+ Network clone_default Creating 
+ Volume clone_sec_filings_pgdata Creating 
+ Network clone_default Creating 
+ Volume clone_sec_filings_pgdata Created 
+ Volume clone_sec_filings_pgdata Created 
+ Network clone_default Created 
+ Network clone_default Created 
+ Container clone-db-1 Creating 
+ Container clone-db-1 Created 
+ Container clone-db-1 Starting 
+ Container clone-db-1 Started 
+ Container clone-db-1 Waiting 
+ Container clone-db-1 Healthy 
+run 1 (daily): status=ok filers=21/21 filings seen=1801 new=1800 relabelled=1800 requests=139 errors=0 duration=35s
+[ok  ] run_complete: fetched and validated 21 of 21 filer pages
+[ok  ] http_health: 0 EDGAR errors, 0 retries, 35s of a 600s budget
+[ok  ] tickers_resolved: every ticker is in company_tickers.json
+[ok  ] cik_changes_acknowledged: no ticker changed CIK
+[ok  ] fiscal_year_end_known: every filer has a fiscal year end
+[ok  ] history_gap: every filer's recent page overlaps its coverage watermark; no coverage gap on record
+[ok  ] sec_labels_refreshed: SEC labels refreshed for 21 filer(s)
+[ok  ] no_filings_lost: no filing has disappeared from the EDGAR feed
+[ok  ] labels_complete: every report has a fiscal label
+[ok  ] labels_unique: one original report per company, year and period
+[ok  ] labels_unique_across_ciks: no period reported by two CIKs of one company
+[info] labels_inferred_for_amendments: 2 amendment(s) labelled from the filing date; read each document and accept the label in overrides.toml (all 2 accepted in overrides.toml)
+[WARN] labels_far_from_calendar: 20 filing(s) not labelled straight from the period of report: 19 from the filing date (EDGAR quirk), 1 off the fiscal calendar (best effort)
+        - {'key': '0000040554-14-000061', 'ticker': 'GE', 'form': '10-Q', 'filed': '2014-05-12', 'report_date': '2014-05-09', 'label': '2014 Q1', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 2014-05-09 is the filing date; labelled from the last quarterly period end before the filing date (2014-03-31)"}
+        - {'key': '0000040545-14-000034', 'ticker': 'GE', 'form': '10-Q', 'filed': '2014-07-31', 'report_date': '2014-07-31', 'label': '2014 Q2', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 2014-07-31 is the filing date; labelled from the last quarterly period end before the filing date (2014-06-30)"}
+        - {'key': '0000040545-14-000049', 'ticker': 'GE', 'form': '10-Q', 'filed': '2014-11-04', 'report_date': '2014-11-03', 'label': '2014 Q3', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 2014-11-03 is the filing date; labelled from the last quarterly period end before the filing date (2014-09-30)"}
+        - {'key': '0000040545-15-000030', 'ticker': 'GE', 'form': '10-K', 'filed': '2015-02-27', 'report_date': '2015-02-27', 'label': '2014 FY', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 2015-02-27 is the filing date; labelled from the last annual period end before the filing date (2014-12-31)"}
+        - {'key': '0000019617-94-000048', 'ticker': 'JPM', 'form': '10-K/A', 'filed': '1994-05-09', 'report_date': '1994-05-06', 'label': '1993 FY', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 1994-05-06 is the filing date; labelled from the last annual period end before the filing date (1993-12-31)"}
+        - {'key': '0000019617-95-000080', 'ticker': 'JPM', 'form': '10-K/A', 'filed': '1995-06-26', 'report_date': '1995-06-21', 'label': '1994 FY', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 1995-06-21 is the filing date; labelled from the last annual period end before the filing date (1994-12-31)"}
+        - {'key': '0001208646-12-000031', 'ticker': 'NVO', 'form': '20-F', 'filed': '2012-02-06', 'report_date': '2012-02-06', 'label': '2011 FY', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 2012-02-06 is the filing date; labelled from the last annual period end before the filing date (2011-12-31)"}
+        - {'key': '0001171843-15-000625', 'ticker': 'NVO', 'form': '20-F', 'filed': '2015-02-05', 'report_date': '2014-02-10', 'label': '2014 FY', 'method': 'rule_far', 'note': 'period end 2014-02-10 is 41 days from the nominal year end (MMDD 1231); transition period or a changed fiscal year end'}
+        - {'key': '0001156973-04-000314', 'ticker': 'SAP', 'form': '20-F', 'filed': '2004-03-23', 'report_date': '2004-03-23', 'label': '2003 FY', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 2004-03-23 is the filing date; labelled from the last annual period end before the filing date (2003-12-31)"}
+        - {'key': '0000732717-08-000012', 'ticker': 'T', 'form': '10-K', 'filed': '2008-02-27', 'report_date': '2008-02-26', 'label': '2007 FY', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 2008-02-26 is the filing date; labelled from the last annual period end before the filing date (2007-12-31)"}
+        ... 10 more
+[ok  ] overdue_reports: no company is past its filing deadline
+[info] labels_match_sec: 4 real disagreement(s) with the SEC's XBRL label on 1017 filings compared; 1 XBRL filing(s) older than 21 days still without a SEC label; 101 are documented naming conventions (GME 73, TM 8, WMT 20); 0 recent filing(s) awaiting one (all 5 accepted in overrides.toml)
+[info] news: 1800 new filing(s) this run, of which 133 amendment(s) or late-filing notice(s); SEC labels refreshed for 21 filer(s)
+        - {'key': '0000320193-97-000021', 'ticker': 'AAPL', 'form': '10-Q/A', 'filed': '1997-10-07', 'period': '1997-10-07', 'label': '1997 Q2'}
+        - {'key': '0001047469-98-001822', 'ticker': 'AAPL', 'form': '10-K/A', 'filed': '1998-01-23', 'period': '1997-09-26', 'label': '1997 FY'}
+        - {'key': '0001104659-06-053743', 'ticker': 'AAPL', 'form': 'NT 10-Q', 'filed': '2006-08-11', 'period': '2006-07-01', 'label': '2006 Q3'}
+        - {'key': '0001104659-06-081617', 'ticker': 'AAPL', 'form': 'NT 10-K', 'filed': '2006-12-15', 'period': '2006-09-30', 'label': '2006 FY'}
+        - {'key': '0001193125-09-087629', 'ticker': 'AAPL', 'form': '10-Q/A', 'filed': '2009-04-27', 'period': '2009-03-28', 'label': '2009 Q2'}
+        - {'key': '0001193125-10-012091', 'ticker': 'AAPL', 'form': '10-K/A', 'filed': '2010-01-25', 'period': '2009-09-26', 'label': '2009 FY'}
+        - {'key': '0001104659-23-053117', 'ticker': 'AMC', 'form': '10-K/A', 'filed': '2023-04-28', 'period': '2022-12-31', 'label': '2022 FY'}
+        - {'key': '0001104659-25-042636', 'ticker': 'AMC', 'form': '10-K/A', 'filed': '2025-04-30', 'period': '2024-12-31', 'label': '2024 FY'}
+        - {'key': '0001104659-26-053024', 'ticker': 'AMC', 'form': '10-K/A', 'filed': '2026-04-30', 'period': '2025-12-31', 'label': '2025 FY'}
+        - {'key': '0001193125-24-044480', 'ticker': 'BABA', 'form': '20-F/A', 'filed': '2024-02-23', 'period': '2023-03-31', 'label': '2023 FY'}
+        ... 123 more
+RESULT: OK
+exit=0
+elapsed=47s
+
+$ make run
+ Container clone-db-1 Running 
+ Container clone-db-1 Waiting 
+ Container clone-db-1 Healthy 
+run 2 (daily): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 requests=22 errors=0 duration=5s
+[ok  ] run_complete: fetched and validated 21 of 21 filer pages
+[ok  ] http_health: 0 EDGAR errors, 0 retries, 5s of a 600s budget
+[ok  ] tickers_resolved: every ticker is in company_tickers.json
+[ok  ] cik_changes_acknowledged: no ticker changed CIK
+[ok  ] fiscal_year_end_known: every filer has a fiscal year end
+[ok  ] history_gap: every filer's recent page overlaps its coverage watermark; no coverage gap on record
+[ok  ] sec_labels_refreshed: SEC labels refreshed for 0 filer(s)
+[ok  ] no_filings_lost: no filing has disappeared from the EDGAR feed
+[ok  ] labels_complete: every report has a fiscal label
+[ok  ] labels_unique: one original report per company, year and period
+[ok  ] labels_unique_across_ciks: no period reported by two CIKs of one company
+[info] labels_inferred_for_amendments: 2 amendment(s) labelled from the filing date; read each document and accept the label in overrides.toml (all 2 accepted in overrides.toml)
+[WARN] labels_far_from_calendar: 20 filing(s) not labelled straight from the period of report: 19 from the filing date (EDGAR quirk), 1 off the fiscal calendar (best effort)
+        - {'key': '0000040554-14-000061', 'ticker': 'GE', 'form': '10-Q', 'filed': '2014-05-12', 'report_date': '2014-05-09', 'label': '2014 Q1', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 2014-05-09 is the filing date; labelled from the last quarterly period end before the filing date (2014-03-31)"}
+        - {'key': '0000040545-14-000034', 'ticker': 'GE', 'form': '10-Q', 'filed': '2014-07-31', 'report_date': '2014-07-31', 'label': '2014 Q2', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 2014-07-31 is the filing date; labelled from the last quarterly period end before the filing date (2014-06-30)"}
+        - {'key': '0000040545-14-000049', 'ticker': 'GE', 'form': '10-Q', 'filed': '2014-11-04', 'report_date': '2014-11-03', 'label': '2014 Q3', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 2014-11-03 is the filing date; labelled from the last quarterly period end before the filing date (2014-09-30)"}
+        - {'key': '0000040545-15-000030', 'ticker': 'GE', 'form': '10-K', 'filed': '2015-02-27', 'report_date': '2015-02-27', 'label': '2014 FY', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 2015-02-27 is the filing date; labelled from the last annual period end before the filing date (2014-12-31)"}
+        - {'key': '0000019617-94-000048', 'ticker': 'JPM', 'form': '10-K/A', 'filed': '1994-05-09', 'report_date': '1994-05-06', 'label': '1993 FY', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 1994-05-06 is the filing date; labelled from the last annual period end before the filing date (1993-12-31)"}
+        - {'key': '0000019617-95-000080', 'ticker': 'JPM', 'form': '10-K/A', 'filed': '1995-06-26', 'report_date': '1995-06-21', 'label': '1994 FY', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 1995-06-21 is the filing date; labelled from the last annual period end before the filing date (1994-12-31)"}
+        - {'key': '0001208646-12-000031', 'ticker': 'NVO', 'form': '20-F', 'filed': '2012-02-06', 'report_date': '2012-02-06', 'label': '2011 FY', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 2012-02-06 is the filing date; labelled from the last annual period end before the filing date (2011-12-31)"}
+        - {'key': '0001171843-15-000625', 'ticker': 'NVO', 'form': '20-F', 'filed': '2015-02-05', 'report_date': '2014-02-10', 'label': '2014 FY', 'method': 'rule_far', 'note': 'period end 2014-02-10 is 41 days from the nominal year end (MMDD 1231); transition period or a changed fiscal year end'}
+        - {'key': '0001156973-04-000314', 'ticker': 'SAP', 'form': '20-F', 'filed': '2004-03-23', 'report_date': '2004-03-23', 'label': '2003 FY', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 2004-03-23 is the filing date; labelled from the last annual period end before the filing date (2003-12-31)"}
+        - {'key': '0000732717-08-000012', 'ticker': 'T', 'form': '10-K', 'filed': '2008-02-27', 'report_date': '2008-02-26', 'label': '2007 FY', 'method': 'rule_filing_date', 'note': "EDGAR's period of report 2008-02-26 is the filing date; labelled from the last annual period end before the filing date (2007-12-31)"}
+        ... 10 more
+[ok  ] overdue_reports: no company is past its filing deadline
+[info] labels_match_sec: 4 real disagreement(s) with the SEC's XBRL label on 1017 filings compared; 1 XBRL filing(s) older than 21 days still without a SEC label; 101 are documented naming conventions (GME 73, TM 8, WMT 20); 0 recent filing(s) awaiting one (all 5 accepted in overrides.toml)
+[info] news: 0 new filing(s) this run, of which 0 amendment(s) or late-filing notice(s)
+RESULT: OK
+exit=0
+elapsed=5s
+
+$ make report TICKER=AAPL YEAR=2009 PERIOD=FY
+ Container clone-db-1 Running 
+ Container clone-db-1 Waiting 
+ Container clone-db-1 Healthy 
+{
+  "ticker": "AAPL",
+  "family": "annual",
+  "fiscal_year": 2009,
+  "fiscal_period": "FY",
+  "form": "10-K",
+  "accession_number": "0001193125-09-214859",
+  "cik": 320193,
+  "also_filed_by_ciks": [],
+  "filing_date": "2009-10-27",
+  "report_date": "2009-09-26",
+  "report_date_corrected": null,
+  "primary_document_url": "https://www.sec.gov/Archives/edgar/data/320193/000119312509214859/d10k.htm",
+  "label_method": "rule",
+  "note": null,
+  "sec_fiscal_year": 2009,
+  "sec_fiscal_period": "FY",
+  "amendments": 1,
+  "amendment_accessions": [
+    "0001193125-10-012091"
+  ],
+  "other_originals": null,
+  "not_seen_since": null
+}
+exit=0
+
+$ make report TICKER=WMT YEAR=2027 PERIOD=Q1
+ Container clone-db-1 Running 
+ Container clone-db-1 Waiting 
+ Container clone-db-1 Healthy 
+{
+  "ticker": "WMT",
+  "family": "quarterly",
+  "fiscal_year": 2027,
+  "fiscal_period": "Q1",
+  "form": "10-Q",
+  "accession_number": "0000104169-26-000102",
+  "cik": 104169,
+  "also_filed_by_ciks": [],
+  "filing_date": "2026-05-29",
+  "report_date": "2026-04-30",
+  "report_date_corrected": null,
+  "primary_document_url": "https://www.sec.gov/Archives/edgar/data/104169/000010416926000102/wmt-20260430.htm",
+  "label_method": "rule",
+  "note": null,
+  "sec_fiscal_year": 2027,
+  "sec_fiscal_period": "Q1",
+  "amendments": 0,
+  "amendment_accessions": null,
+  "other_originals": null,
+  "not_seen_since": null
+}
+exit=0
+
+$ make report TICKER=ZZZ YEAR=2000
+ Container clone-db-1 Running 
+ Container clone-db-1 Waiting 
+ Container clone-db-1 Healthy 
+nothing on record for ZZZ fiscal 2000 FY
+make: *** [report] Error 1
+exit=2
+
+$ make check
+ Container clone-db-1 Running 
+ Container clone-db-1 Waiting 
+ Container clone-db-1 Healthy 
+latest run 2 (daily) started 2026-11-08 09:56 UTC status=ok filers=21/21 new filings=0 errors=0
+[ok] ran_today: a successful run started today (UTC)
+[ok  ] run_complete: fetched and validated 21 of 21 filer pages
+[ok  ] http_health: 0 EDGAR errors, 0 retries, 5s of a 600s budget
+[ok  ] tickers_resolved: every ticker is in company_tickers.json
+[ok  ] cik_changes_acknowledged: no ticker changed CIK
+[ok  ] fiscal_year_end_known: every filer has a fiscal year end
+[ok  ] history_gap: every filer's recent page overlaps its coverage watermark; no coverage gap on record
+[ok  ] sec_labels_refreshed: SEC labels refreshed for 0 filer(s)
+[ok  ] no_filings_lost: no filing has disappeared from the EDGAR feed
+[ok  ] labels_complete: every report has a fiscal label
+[ok  ] labels_unique: one original report per company, year and period
+[ok  ] labels_unique_across_ciks: no period reported by two CIKs of one company
+[info] labels_inferred_for_amendments: 2 amendment(s) labelled from the filing date; read each document and accept the label in overrides.toml (all 2 accepted in overrides.toml)
+[WARN] labels_far_from_calendar: 20 filing(s) not labelled straight from the period of report: 19 from the filing date (EDGAR quirk), 1 off the fiscal calendar (best effort)
+        - {'key': '0000040554-14-000061', 'form': '10-Q', 'note': "EDGAR's period of report 2014-05-09 is the filing date; labelled from the last quarterly period end before the filing date (2014-03-31)", 'filed': '2014-05-12', 'label': '2014 Q1', 'method': 'rule_filing_date', 'ticker': 'GE', 'report_date': '2014-05-09'}
+        - {'key': '0000040545-14-000034', 'form': '10-Q', 'note': "EDGAR's period of report 2014-07-31 is the filing date; labelled from the last quarterly period end before the filing date (2014-06-30)", 'filed': '2014-07-31', 'label': '2014 Q2', 'method': 'rule_filing_date', 'ticker': 'GE', 'report_date': '2014-07-31'}
+        - {'key': '0000040545-14-000049', 'form': '10-Q', 'note': "EDGAR's period of report 2014-11-03 is the filing date; labelled from the last quarterly period end before the filing date (2014-09-30)", 'filed': '2014-11-04', 'label': '2014 Q3', 'method': 'rule_filing_date', 'ticker': 'GE', 'report_date': '2014-11-03'}
+        - {'key': '0000040545-15-000030', 'form': '10-K', 'note': "EDGAR's period of report 2015-02-27 is the filing date; labelled from the last annual period end before the filing date (2014-12-31)", 'filed': '2015-02-27', 'label': '2014 FY', 'method': 'rule_filing_date', 'ticker': 'GE', 'report_date': '2015-02-27'}
+        - {'key': '0000019617-94-000048', 'form': '10-K/A', 'note': "EDGAR's period of report 1994-05-06 is the filing date; labelled from the last annual period end before the filing date (1993-12-31)", 'filed': '1994-05-09', 'label': '1993 FY', 'method': 'rule_filing_date', 'ticker': 'JPM', 'report_date': '1994-05-06'}
+        - {'key': '0000019617-95-000080', 'form': '10-K/A', 'note': "EDGAR's period of report 1995-06-21 is the filing date; labelled from the last annual period end before the filing date (1994-12-31)", 'filed': '1995-06-26', 'label': '1994 FY', 'method': 'rule_filing_date', 'ticker': 'JPM', 'report_date': '1995-06-21'}
+        - {'key': '0001208646-12-000031', 'form': '20-F', 'note': "EDGAR's period of report 2012-02-06 is the filing date; labelled from the last annual period end before the filing date (2011-12-31)", 'filed': '2012-02-06', 'label': '2011 FY', 'method': 'rule_filing_date', 'ticker': 'NVO', 'report_date': '2012-02-06'}
+        - {'key': '0001171843-15-000625', 'form': '20-F', 'note': 'period end 2014-02-10 is 41 days from the nominal year end (MMDD 1231); transition period or a changed fiscal year end', 'filed': '2015-02-05', 'label': '2014 FY', 'method': 'rule_far', 'ticker': 'NVO', 'report_date': '2014-02-10'}
+        - {'key': '0001156973-04-000314', 'form': '20-F', 'note': "EDGAR's period of report 2004-03-23 is the filing date; labelled from the last annual period end before the filing date (2003-12-31)", 'filed': '2004-03-23', 'label': '2003 FY', 'method': 'rule_filing_date', 'ticker': 'SAP', 'report_date': '2004-03-23'}
+        - {'key': '0000732717-08-000012', 'form': '10-K', 'note': "EDGAR's period of report 2008-02-26 is the filing date; labelled from the last annual period end before the filing date (2007-12-31)", 'filed': '2008-02-27', 'label': '2007 FY', 'method': 'rule_filing_date', 'ticker': 'T', 'report_date': '2008-02-26'}
+        ... 10 more
+[ok  ] overdue_reports: no company is past its filing deadline
+[info] labels_match_sec: 4 real disagreement(s) with the SEC's XBRL label on 1017 filings compared; 1 XBRL filing(s) older than 21 days still without a SEC label; 101 are documented naming conventions (GME 73, TM 8, WMT 20); 0 recent filing(s) awaiting one (all 5 accepted in overrides.toml)
+[info] news: 0 new filing(s) this run, of which 0 amendment(s) or late-filing notice(s)
+RESULT: OK
+exit=0
+
+$ make verify-labels
+ Container clone-db-1 Running 
+ Container clone-db-1 Waiting 
+ Container clone-db-1 Healthy 
+{"labels_stored": 1017, "compared": 1017, "raw_disagreements": 105, "filers_without_xbrl": []}
+[info] labels_match_sec: 4 real disagreement(s) with the SEC's XBRL label on 1017 filings compared; 1 XBRL filing(s) older than 21 days still without a SEC label; 101 are documented naming conventions (GME 73, TM 8, WMT 20); 0 recent filing(s) awaiting one (all 5 accepted in overrides.toml)
+exit=0
+elapsed=6s
+
+$ make test
+........................................................................ [ 24%]
+........................................................................ [ 49%]
+........................................................................ [ 73%]
+............................................................ssssssssssss [ 98%]
+ss...                                                                    [100%]
+279 passed, 14 skipped in 0.33s
+exit=0
+
+$ make test-db
+ Container clone-db-1 Running 
+ Container clone-db-1 Waiting 
+ Container clone-db-1 Healthy 
+..............                                                           [100%]
+14 passed in 1.81s
+exit=0
+
+$ make summary | wc -l
+      20
+
+$ make backfill    # nothing pending: costs the same as a morning run
+run 3 (backfill): status=ok filers=21/21 filings seen=558 new=0 relabelled=0 requests=22 errors=0 duration=6s
+RESULT: OK
+
+$ echo NVDA >> companies.csv && make run    # adding a company is one line
+run 4 (daily): status=ok filers=22/22 filings seen=676 new=118 relabelled=118 requests=25 errors=0 duration=6s
+[FAIL] labels_match_sec: 25 real disagreement(s) with the SEC's XBRL label on 1086 filings compared; 1 XBRL filing(s) older than 21 days still without a SEC label; 101 are documented naming convention
+RESULT: ATTENTION NEEDED
+
+$ make report TICKER=NVDA YEAR=2005    # older than NVDA's recent page
+  "form": "10-K",
+  "filing_date": "2005-03-22",
+
+$ make run    # the history is read once
+run 5 (daily): status=ok filers=22/22 filings seen=582 new=0 relabelled=0 requests=23 errors=0 duration=5s
+[FAIL] labels_match_sec: 25 real disagreement(s) with the SEC's XBRL label on 1086 filings compared; 1 XBRL filing(s) older than 21 days still without a SEC label; 101 are documented naming convention
+RESULT: ATTENTION NEEDED
+
+# The labels_match_sec failure above is the hard check asking a person to look at a new company (AGENTS.md section 4,
+# step 5): the twenty submitted companies were clean on run 2, so all 25 disagreements are NVDA. NVDA is not on the submitted list.

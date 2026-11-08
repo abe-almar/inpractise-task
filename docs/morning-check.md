@@ -3,7 +3,7 @@
 If tomorrow's 06:00 run is wrong, what tells us? Not the exit code of a crash: a run can finish green and still be
 wrong. So every run ends by evaluating sixteen named conditions against the database and recording them in the
 `checks` table, and the process exits 0 only when the run completed **and** every hard check passed. The scheduler
-alerts on a non-zero exit; a person (or an agent) then runs `sec-filings check`, which prints the latest run's
+alerts on a non-zero exit; a person (or an agent) then runs `make check`, which prints the latest run's
 stored checks without touching EDGAR, and adds one condition of its own: that a successful run started today.
 
 ## What "wrong" means here
@@ -14,7 +14,7 @@ stored checks without touching EDGAR, and adds one condition of its own: that a 
 | `tickers_resolved` | hard | a ticker in `companies.csv` is not in `company_tickers.json` and has no evidenced CIK override | the company would silently stop being tracked |
 | `cik_changes_acknowledged` | hard | a ticker now maps to a different CIK than before, and nobody has recorded the old CIK in `overrides.toml` | Exxon did exactly this on 2026-07-01; a job keyed on the new CIK loses thirty years |
 | `fiscal_year_end_known` | hard | a filer has no fiscal year end in EDGAR and no override | no label can be derived (Alibaba's is null in EDGAR) |
-| `history_gap` | hard | a filer has a coverage gap on record: its recent page started after the filer's coverage watermark (the date through which its filings are known complete, advanced only by a page that overlaps it or by a history read); the gap stays until `backfill` re-reads that filer's history | filings could have entered and left the page during the outage; a later run merely reaching its checks does not bridge it (`docs/evidence/outage-recovery-2026-11-07.log`) |
+| `history_gap` | hard | a filer has a coverage gap on record: its recent page started after the filer's coverage watermark (the date through which its filings are known complete, advanced only by a page that overlaps it or by a history read); the gap stays until `make backfill` re-reads that filer's history | filings could have entered and left the page during the outage; a later run merely reaching its checks does not bridge it (`docs/evidence/outage-recovery-2026-11-07.log`) |
 | `sec_labels_refreshed` | hard | the refresh of the SEC's XBRL labels failed for a filer | the cross-check would silently stop covering new filings; the refresh is retried every run while a filing is unlabelled |
 | `no_filings_lost` | hard | any filing we have seen is no longer listed in the window the page covers, until it reappears or is accepted | EDGAR does delete after acceptance; the row stays, flagged, and someone decides; the alarm does not fade after one morning |
 | `labels_complete` | hard | a report has no fiscal year, period or method | the one-row question cannot be answered |
@@ -34,9 +34,9 @@ conventions included: a company counts as "naming its year by the start" only wh
 
 ## The 06:00 run, concretely
 
-1. The scheduler runs `sec-filings run` and gets exit code 0 or 1.
-2. On 1, the alert carries the printed report. The first line gives the run id, filers fetched and validated, new
-   filings and requests; each check follows with its items. `sec-filings check` reprints it later.
+1. The scheduler runs `make run` and gets exit code 0 or non-zero.
+2. On non-zero, the alert carries the printed report. The first line gives the run id, filers fetched and validated,
+   new filings and requests; each check follows with its items. `make check` reprints it later.
 3. On 0, nobody has to look. The `news` line says what came in ("2 new filings, of which 1 amendment"), and whether
    the SEC labels of the filers with news were refreshed for the cross-check.
 
@@ -48,7 +48,7 @@ conventions included: a company counts as "naming its year by the start" only wh
 - A wrong fiscal year end in EDGAR for a company whose XBRL labels also follow it. `labels_far_from_calendar` would
   still flag the off-calendar period ends.
 - A deletion outside the window the daily page covers (older than the oldest filing on the recent page). A
-  `backfill --full` re-reads every page and flags those too.
+  `make backfill FULL=1` re-reads every page and flags those too.
 - Federal holidays in the deadline arithmetic (weekends are handled), and the deadline of a 52/53-week quarter,
   which is taken as thirteen weeks after the last report: a day or two of slack, which is why it is a soft check.
 - Changes in the content of a filing. The job tracks filings, not what is in them.
@@ -57,5 +57,5 @@ conventions included: a company counts as "naming its year by the start" only wh
 
 The checks ran clean on run 5 of 2026-11-07 (`docs/evidence/daily-run-5-2026-11-07.log`), after a review pass had
 shown that two of them could stay silent (`docs/review-evidence/`). To see a hard failure, rename a ticker in
-`companies.csv` to one that does not exist and run `sec-filings run`: `tickers_resolved` fails, the exit code is 1,
+`companies.csv` to one that does not exist and run `make run`: `tickers_resolved` fails, the exit code is non-zero,
 and the next run with the ticker restored is green again.

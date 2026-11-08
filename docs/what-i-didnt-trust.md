@@ -31,14 +31,16 @@ a naming convention" would have excused an off-by-one bug in my own rule; accept
 20-F deadline was 120 days, not four months. Passes 2 to 4 each caught a defect in the previous fix: a "last good
 run" baseline that first faded the outage alarm, then made recovery impossible, then an initialisation that cleared
 an inherited gap. Coverage is now a per-filer watermark, exercised live on an outage
-(`docs/evidence/outage-recovery-2026-11-07.log`). Left as stated limitations: federal holidays and the thirteen-week
-approximation of 52/53-week quarter ends.
+(`docs/evidence/outage-recovery-2026-11-07.log`).
 
 **The fresh-agent test found what the kit could not express.** With no persona, it added five companies, found the
 Google and Disney predecessor CIKs on its own, and stopped, correctly, on a Disney 10-Q whose EDGAR period is a year
 off: the kit had no per-filing correction. That became `[[filing_corrections]]`, which then fixed an error of my own
-(a 1997 Apple amendment inferred as Q3 amends, per its cover, Q2). My first attempt at the test never started: the
-persona I had written forbade leaving the main directory, and the agent refused, correctly.
+(a 1997 Apple amendment inferred as Q3 amends, per its cover, Q2).
+
+**The one command on an empty database.** Six review passes and the fresh agent all followed the README's first step,
+`backfill`, so nobody ran the README's one command on nothing. When it became `make run` I tried that: `RESULT: OK`,
+557 of 1,800 filings, no Apple 2009. A filer's first run now reads its history, whichever the mode.
 
 **What held up.** An independent audit through a different route (the www.sec.gov Atom feeds) matched all 183
 accession numbers, forms and filing dates for Apple and GameStop since 2009, Shell's 20-Fs and both Exxon CIKs, and

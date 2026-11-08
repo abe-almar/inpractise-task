@@ -33,7 +33,7 @@ that day. Evidence lives in `docs/evidence/`, review reports in `docs/review-evi
 - A filing listed by several registrants under one accession number (Exxon's Q2 2026 10-Q) is stored once, under
   the first registrant that listed it; the others are in `also_filed_by_ciks`, and the first registrant's metadata
   is kept. The `reports` view reaches a filing through every registrant.
-- Check: the two Exxon submissions JSON files; `sec-filings report XOM 2026 Q2`.
+- Check: the two Exxon submissions JSON files; `make report TICKER=XOM YEAR=2026 PERIOD=Q2`.
 - History: the probe note first said both CIKs had filed a Q2 2026 10-Q; the backfill showed one combined filing.
   Review pass 1 found the second registrant's page overwriting the first's file number and URL; fixed.
 
@@ -83,11 +83,12 @@ that day. Evidence lives in `docs/evidence/`, review reports in `docs/review-evi
   corrections, coverage, refresh queue) and was collapsed into one file in the final simplification pass; the git
   history keeps the sequence.
 
-## D5. Backfill once, incremental every morning, never delete
+## D5. History once per filer, incremental every morning, never delete
 
-- `backfill` reads the recent page and every history page listed under `filings.files` (JPM alone has 71 pages)
-  once per filer, again for a filer with a coverage gap on record, and for everyone with `--full`. `run` reads the
-  ticker file and one recent page per CIK (about 22 requests) and upserts by accession number. Both are idempotent.
+- The first time a filer is seen, on any run, its recent page and every history page listed under `filings.files`
+  (JPM alone has 71 pages) are read. After that `run` reads the ticker file and one recent page per CIK (about 22
+  requests) and upserts by accession number; `backfill` also re-reads the history of a filer with a coverage gap on
+  record, and of everyone with `--full`. Both are idempotent.
 - A page counts as fetched only after validation (right CIK, non-empty and consistent recent block); a failing page
   is recorded and fails `run_complete` without aborting the other filers.
 - A filing that disappears from the pages is never deleted: it gets `not_seen_since`, stays a hard finding until it
@@ -116,17 +117,25 @@ that day. Evidence lives in `docs/evidence/`, review reports in `docs/review-evi
 
 ## D8. Packaging and the one command
 
-- Python 3.12, `pyproject.toml`, `pip install -e .`, console script `sec-filings` with `run`, `backfill [--full]`,
-  `check`, `verify-labels`, `report`, `summary`. The README's one command is `sec-filings run` with `DATABASE_URL`
-  set; `.env` in the working directory is read. Adding a company is a line in `companies.csv` plus `backfill`.
+- Python 3.12, `pyproject.toml`, console script `sec-filings` with `run`, `backfill [--full]`, `check`,
+  `verify-labels`, `report`, `summary`, and a `Makefile` with one thin target for each. The README's one command is
+  `make run`, which works from a fresh clone: it starts the compose database if `DATABASE_URL` is not set elsewhere,
+  installs the job into `.venv` and calls `sec-filings run`. The job itself only reads `DATABASE_URL` (and a `.env`
+  in the working directory). Adding a company is a line in `companies.csv`; the next run reads its history.
 - Prefect shape without Prefect: `sec_filings.flow.daily_run(settings, mode)` is a plain function; the README shows
   the six-line wrapper. The exit code is the contract with the scheduler: 0 only when the run and every hard check
-  passed.
+  passed (`sec-filings` exits 1 otherwise, which `make` reports as 2).
+- Rejected: `make run` always calling `backfill`. It costs the same when nothing is pending, but it would repair a
+  coverage gap by itself, and `history_gap` is meant to stay red until someone has looked.
+- Check: `docs/evidence/make-run-clean-clone-2026-11-08.log`; `test_a_first_daily_run_loads_the_whole_history`.
+- History (2026-11-08): `backfill` used to be a separate first step. Trying `make run` on an empty database showed
+  that a plain `run` ended `RESULT: OK` with 557 of 1,800 filings and no Apple 2009: every filer got a watermark from
+  its recent page, so no check could tell. Forgetting `backfill` after adding a company did the same to that company.
 
 ## D9. The morning check
 
 - Sixteen named checks, evaluated at the end of every run and stored in `checks`; hard checks fail the process, soft
-  ones warn, info never fails. `sec-filings check` re-reads the latest run's stored results and adds "did a clean run
+  ones warn, info never fails. `make check` re-reads the latest run's stored results and adds "did a clean run
   start today". Accepting a finding is an explicit `[[accepted_findings]]` entry with what was looked at; the whole
   item list is evaluated against the acceptances. The list and what each check catches: `docs/morning-check.md`.
 - History: pass 1 of the review found the disappearance alarm firing once and then going quiet, an empty page
@@ -189,6 +198,6 @@ agent-logs/          exported session transcripts
   correction beside it, labels from it and marks the row `corrected`; removing the entry removes the correction.
 - Rejected: editing rows by hand (invisible, lost on relabel); accepting the duplicate-key finding (the `reports`
   view would still miss the real period); bending the rule per company.
-- Check: `sec-filings report AAPL 1997 Q2`; the replay test.
+- Check: `make report TICKER=AAPL YEAR=1997 PERIOD=Q2`; the replay test.
 - History: found by the fresh-agent test, which stopped on the Disney filing because the kit had no way to express
   the correction.

@@ -221,7 +221,7 @@ def check_history_gap(conn: psycopg.Connection, f: RunFacts) -> CheckResult:
     return _finding("history_gap", "hard", items,
                     "every filer's recent page overlaps its coverage watermark; no coverage gap on record",
                     f"{len(items)} filer(s) with a coverage gap on record (recent page started after the filer's coverage watermark); "
-                    "run `sec-filings backfill` (it re-reads the history of the filers with a gap)")
+                    "run `make backfill` (it re-reads the history of the filers with a gap)")
 
 
 def check_no_filings_lost(conn: psycopg.Connection, f: RunFacts) -> CheckResult:

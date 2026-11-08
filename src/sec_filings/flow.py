@@ -58,8 +58,9 @@ class _Loaded:
 
 def daily_run(settings: Settings, mode: str = "daily", client: EdgarClient | None = None, today: date | None = None,
               full: bool = False) -> RunResult:
-    """Fetch, load, label and check. `mode` is 'daily' (recent pages only) or 'backfill' (history pages too: once per
-    filer, again for a filer with a coverage gap, for everyone with `full=True`)."""
+    """Fetch, load, label and check. A filer's history pages are read the first time it is seen, in either mode. After
+    that `mode` 'daily' reads recent pages only and 'backfill' also re-reads history: for a filer with a coverage gap, for
+    everyone with `full=True`."""
     if mode not in ("daily", "backfill"):
         raise ValueError("mode must be 'daily' or 'backfill'")
     today = today or datetime.now(timezone.utc).date()

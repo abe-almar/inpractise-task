@@ -6,7 +6,7 @@ nearest the period end. Apple's year ended 2009-09-26 is fiscal 2009; Walmart's 
 it. Quarters are counted from the previous nominal year end: Apple's quarter ended 2025-12-27 is fiscal 2026 Q1. The
 rule uses only the period of report and the company's fiscal year end (MMDD), so it works for every filing since
 1994. Companies that name their years differently (GameStop calls the year ended 2025-02-01 "fiscal 2024") get the
-SEC's own label stored next to ours by `sec-filings verify-labels`; the rule itself is never bent per company.
+SEC's own label stored next to ours by `make verify-labels`; the rule itself is never bent per company.
 """
 
 from __future__ import annotations

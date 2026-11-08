@@ -42,7 +42,7 @@ CHECK_NAMES = {
     "labels_inferred_for_amendments", "labels_far_from_calendar", "overdue_reports", "labels_match_sec", "news",
 }
 NO_GAP = "every filer's recent page overlaps its coverage watermark; no coverage gap on record"
-GAP_REMEDY = "run `sec-filings backfill` (it re-reads the history of the filers with a gap)"
+GAP_REMEDY = "run `make backfill` (it re-reads the history of the filers with a gap)"
 
 CORRECTION_TOML = f"""
 [[filing_corrections]]
@@ -672,6 +672,38 @@ def test_coverage_gap_is_persistent_until_a_history_read(schema, tmp_path: Path)
     assert _coverage(conn) == {cik: (day(6), None) for cik in (AAPL, XOM_NEW, XOM_OLD)}
 
 
+def test_a_first_daily_run_loads_the_whole_history(schema, tmp_path: Path):
+    """The README's one command on an empty database, then a company added later. Until 2026-11-08 a daily run read
+    recent pages only: on an empty database it ended RESULT: OK with 557 of 1,800 filings and no Apple 2009."""
+    name, conn = schema
+    pages = all_fixtures()
+    client = FakeEdgarClient(copy.deepcopy(pages), companyfacts=agreeing_facts(pages))
+    names = {cik: add_history(client, cik) for cik in (AAPL, XOM_NEW, XOM_OLD)}
+    older_report = {"accession": "0000320193-91-000099", "form": "10-K", "filed": date(1991, 12, 20), "period": date(1991, 9, 27), "xbrl": 0}
+    client.older_pages[names[AAPL]] = synthetic_page(AAPL, "history", "H", "0926", [older_report])["filings"]["recent"]
+
+    # the first run ever is a plain daily run: the history is read and the old report answers
+    settings = make_settings(name, tmp_path, ["AAPL"], CORRECTION_TOML)
+    first = daily_run(settings, mode="daily", client=client, today=TODAY)
+    assert first.ok, _hard_failures(first)
+    assert first.mode == "daily"
+    assert _history_urls(client) == [names[AAPL]]
+    assert [row["form"] for row in report.answer(conn, "AAPL", 1991, "FY")] == ["10-K"]
+
+    # the second run reads no history again
+    second = daily_run(settings, mode="daily", client=client, today=TODAY + timedelta(days=1))
+    assert second.ok, _hard_failures(second)
+    assert second.filings_inserted == 0
+    assert _history_urls(client) == [names[AAPL]]
+
+    # a company added later: the next daily run reads its history and nobody else's, predecessor CIK included
+    settings = make_settings(name, tmp_path, ["AAPL", "XOM"], CORRECTION_TOML + XOM_OVERRIDE_TOML)
+    third = daily_run(settings, mode="daily", client=client, today=TODAY + timedelta(days=2))
+    assert third.ok, _hard_failures(third)
+    assert sorted(_history_urls(client)[1:]) == sorted([names[XOM_NEW], names[XOM_OLD]])
+    assert conn.execute("SELECT count(*) AS n FROM filers WHERE backfill_completed_at IS NULL").fetchone()["n"] == 0
+
+
 def test_advance_coverage_rules(schema):
     _, conn = schema
     run_id = conn.execute("INSERT INTO runs (mode) VALUES ('daily') RETURNING id").fetchone()["id"]
@@ -683,30 +715,31 @@ def test_advance_coverage_rules(schema):
     def coverage():
         return conn.execute("SELECT coverage_through, coverage_gap_since, backfill_completed_at FROM filers WHERE cik = %s", (cik,)).fetchone()
 
-    # first observation without history: the watermark starts today, nothing is read
+    # a filer's first run reads its history even when it is a daily run: the watermark starts today
     first = loader.ingest_filer(conn, client, run_id, cik, backfill=False, overrides_fye=None, today=date(2026, 11, 1))
-    assert first.history_fetched is False
-    assert coverage() == {"coverage_through": date(2026, 11, 1), "coverage_gap_since": None, "backfill_completed_at": None}
-    # the page overlaps the watermark (its oldest filing is older than it): the watermark advances
-    loader.ingest_filer(conn, client, run_id, cik, backfill=False, overrides_fye=None, today=date(2026, 11, 2))
+    assert first.history_fetched is True
+    row = coverage()
+    assert (row["coverage_through"], row["coverage_gap_since"]) == (date(2026, 11, 1), None) and row["backfill_completed_at"] is not None
+    # the page overlaps the watermark (its oldest filing is older than it): the watermark advances, nothing more is read
+    assert loader.ingest_filer(conn, client, run_id, cik, backfill=False, overrides_fye=None, today=date(2026, 11, 2)).history_fetched is False
     assert coverage()["coverage_through"] == date(2026, 11, 2)
     # a page that starts after the watermark: the gap is recorded with today's date, the watermark stays
     conn.execute("UPDATE filers SET coverage_through = %s WHERE cik = %s", (start - timedelta(days=1), cik))
     loader.ingest_filer(conn, client, run_id, cik, backfill=False, overrides_fye=None, today=date(2026, 11, 3))
-    assert coverage() == {"coverage_through": start - timedelta(days=1), "coverage_gap_since": date(2026, 11, 3), "backfill_completed_at": None}
+    row = coverage()
+    assert (row["coverage_through"], row["coverage_gap_since"]) == (start - timedelta(days=1), date(2026, 11, 3))
     loader.ingest_filer(conn, client, run_id, cik, backfill=False, overrides_fye=None, today=date(2026, 11, 4))
     assert coverage()["coverage_gap_since"] == date(2026, 11, 3)                       # the first date is kept
     # a watermark equal to the page start overlaps it
     conn.execute("UPDATE filers SET coverage_through = %s, coverage_gap_since = NULL WHERE cik = %s", (start, cik))
     loader.ingest_filer(conn, client, run_id, cik, backfill=False, overrides_fye=None, today=date(2026, 11, 5))
-    assert coverage() == {"coverage_through": date(2026, 11, 5), "coverage_gap_since": None, "backfill_completed_at": None}
-    # no watermark yet (a filer from before watermarks existed) but a gap on record: the watermark starts today and
-    # the gap stays, because only a history read ever clears a gap
-    conn.execute("UPDATE filers SET coverage_through = NULL, coverage_gap_since = %s WHERE cik = %s", (date(2026, 11, 3), cik))
-    loader.ingest_filer(conn, client, run_id, cik, backfill=False, overrides_fye=None, today=date(2026, 11, 6))
-    assert coverage() == {"coverage_through": date(2026, 11, 6), "coverage_gap_since": date(2026, 11, 3), "backfill_completed_at": None}
-    # a history read (backfill: never read before) sets the watermark, clears the gap and marks the backfill done
-    conn.execute("UPDATE filers SET coverage_through = %s WHERE cik = %s", (date(2000, 1, 1), cik))
+    row = coverage()
+    assert (row["coverage_through"], row["coverage_gap_since"]) == (date(2026, 11, 5), None)
+    # a daily run with a gap on record does not read history and does not clear the gap
+    conn.execute("UPDATE filers SET coverage_through = %s, coverage_gap_since = %s WHERE cik = %s", (date(2000, 1, 1), date(2026, 11, 3), cik))
+    assert loader.ingest_filer(conn, client, run_id, cik, backfill=False, overrides_fye=None, today=date(2026, 11, 6)).history_fetched is False
+    assert coverage()["coverage_gap_since"] == date(2026, 11, 3)
+    # a backfill reads it: the watermark moves to today and the gap clears
     done = loader.ingest_filer(conn, client, run_id, cik, backfill=True, overrides_fye=None, today=date(2026, 11, 7))
     assert done.history_fetched is True
     row = coverage()

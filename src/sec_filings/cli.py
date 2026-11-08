@@ -1,4 +1,4 @@
-"""Command line: `sec-filings run` is the one command the scheduler calls."""
+"""Command line. `make run` calls `sec-filings run`, the one command a scheduler needs."""
 
 from __future__ import annotations
 
@@ -20,8 +20,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="sec-filings", description="Keep a Postgres table of the annual and quarterly reports companies filed with the SEC.")
     p.add_argument("-v", "--verbose", action="store_true", help="debug logging")
     sub = p.add_subparsers(dest="command", required=True)
-    sub.add_parser("run", help="daily run: fetch the recent filings of every company, load, label, check (exit 1 if a hard check fails)")
-    b = sub.add_parser("backfill", help="like run, but also reads the older submissions pages of every filer whose history has not been read yet (first run, or after adding a company)")
+    sub.add_parser("run", help="daily run: fetch the recent filings of every company (and the whole history of any filer seen for the first time), load, label, check (exit 1 if a hard check fails)")
+    b = sub.add_parser("backfill", help="like run, but also re-reads the older submissions pages of every filer with a coverage gap on record")
     b.add_argument("--full", action="store_true", help="re-read every older page of every filer, even those already read")
     sub.add_parser("check", help="re-read the latest run's stored checks without fetching anything; exit 1 if it is not a clean run from today")
     sub.add_parser("verify-labels", help="load the SEC's own fiscal labels from the XBRL companyfacts API for every filer, then evaluate the labels_match_sec check (exit 1 on a real disagreement)")
