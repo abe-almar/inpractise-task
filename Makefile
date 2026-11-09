@@ -18,7 +18,7 @@ CLI := .venv/bin/sec-filings
 PERIOD ?= FY
 
 .DEFAULT_GOAL := help
-.PHONY: help run backfill check report summary verify-labels test test-db setup db
+.PHONY: help run backfill check report summary verify-labels test test-db setup lock db
 
 help:  ## List the targets
 	@awk -F':.*## ' '/^[a-z-]+:.*## / {printf "%-16s%s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -49,11 +49,19 @@ test-db: setup $(START_DB)  ## The replay tests against Postgres (each in its ow
 
 setup: $(CLI)  ## Create the virtualenv and install; does nothing when already done
 
-$(CLI): pyproject.toml
+$(CLI): pyproject.toml constraints.txt
 	@"$(PYTHON)" -c 'import sys; sys.exit(sys.version_info < (3, 12) and "Python 3.12+ is needed, %s is %s: set PYTHON to a newer one" % (sys.executable, sys.version.split()[0]))'
 	"$(PYTHON)" -m venv --clear .venv
-	.venv/bin/pip install --quiet -e ".[dev]"
+	.venv/bin/pip install --quiet -c constraints.txt -e ".[dev]"
 	@touch $@
+
+lock: setup  ## Resolve the newest versions pyproject.toml allows and pin them in constraints.txt
+	@.venv/bin/pip install --quiet --upgrade -e ".[dev]"
+	@{ echo "# Exact versions make installs into .venv (pip -c). Refresh with make lock; never edit by hand."; \
+	   echo "# No hashes: pip's hash mode refuses the editable install of the job itself (-e .)."; \
+	   .venv/bin/pip freeze --exclude-editable; } > constraints.txt
+	@touch $(CLI)
+	@echo "constraints.txt refreshed from .venv; now run the completion checks (AGENTS.md, section 7)"
 
 db:  ## Start the database in docker-compose.yml (run does it when there is no DATABASE_URL and no .env)
 	@docker compose up -d --wait --quiet-pull

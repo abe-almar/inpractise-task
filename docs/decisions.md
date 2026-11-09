@@ -163,6 +163,12 @@ that day. Evidence lives in `docs/evidence/`, review reports in `docs/review-evi
   starts with `database: host:port/name` (never the user or the password; a malformed URL is named as such and the
   connection error still follows). `report` and `summary` say it on stderr, so their stdout stays JSON for a pipe.
   Check: `tests/test_cli.py`.
+- History (2026-11-09): a fresh clone installed whatever versions PyPI served that morning, within the ranges in
+  `pyproject.toml`. `constraints.txt` now pins the exact versions (`pip install -c`), and `make lock` refreshes it
+  from a deliberate upgrade. Rejected: `uv` or pip-tools (another tool on the reviewer's machine for the one command);
+  hash pinning (pip's hash mode refuses the editable install of the job). The pins have no environment markers and
+  were taken on Python 3.14; the container image (D17) installs them on 3.12, which is the check that they travel.
+  Check: `tests/test_cli.py` (every declared dependency is pinned exactly).
 
 ## D9. The morning check
 

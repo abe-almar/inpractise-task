@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import socket
+import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -141,3 +142,18 @@ def test_check_says_whether_the_inputs_changed_since_the_run(monkeypatch, capsys
     run["notes"] = {}
     assert cli.main(["check"]) == 0
     assert "[info] inputs_unchanged: this run recorded no input fingerprints" in capsys.readouterr().out.splitlines()
+
+
+def test_every_dependency_is_pinned_in_constraints():
+    """A fresh clone installs the versions in constraints.txt, not whatever PyPI serves that morning."""
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    declared = {re.match(r"[A-Za-z0-9_.-]+", d).group(0).lower().replace("_", "-")
+                for d in project["dependencies"] + project["optional-dependencies"]["dev"]}
+    pinned = {}
+    for line in (ROOT / "constraints.txt").read_text(encoding="utf-8").splitlines():
+        if line.strip() and not line.startswith("#"):
+            assert line.count("==") == 1, f"not an exact pin: {line}"
+            name, version = line.split("==")
+            pinned[name.lower().replace("_", "-")] = version
+    assert declared <= set(pinned), declared - set(pinned)
+    assert '-c constraints.txt -e ".[dev]"' in (ROOT / "Makefile").read_text(encoding="utf-8")
