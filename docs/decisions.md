@@ -158,6 +158,11 @@ that day. Evidence lives in `docs/evidence/`, review reports in `docs/review-evi
 - History (2026-11-08): the first run on a second machine found 5432 taken by an editor's port forward. Docker left the
   container healthy but unpublished, and the job ended in a stack trace that never mentioned the port. Once the port was
   free that machine gave the expected results on Python 3.14: 1,800 filings, then `new=0` with 22 requests, tests green.
+- History (2026-11-09): review passes 7 and 8 had found a green run against the wrong database, and nothing in a
+  successful run's output said which one it used; only the connection error named host and port. Every command now
+  starts with `database: host:port/name` (never the user or the password; a malformed URL is named as such and the
+  connection error still follows). `report` and `summary` say it on stderr, so their stdout stays JSON for a pipe.
+  Check: `tests/test_cli.py`.
 
 ## D9. The morning check
 

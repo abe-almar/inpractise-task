@@ -51,6 +51,7 @@ def _run_command(argv: list[str] | None) -> int:
         print(f"configuration error: {exc}", file=sys.stderr)
         return 2
     if args.command in ("run", "backfill"):
+        _name_database(settings)
         result = daily_run(settings, mode="daily" if args.command == "run" else "backfill", full=getattr(args, "full", False))
         print(f"run {result.run_id} ({result.mode}): status={result.status} filers={result.ciks_fetched}/{result.ciks_expected} "
               f"filings seen={result.filings_seen} new={result.filings_inserted} relabelled={result.relabelled} "
@@ -62,6 +63,8 @@ def _run_command(argv: list[str] | None) -> int:
         print("RESULT: OK" if result.ok else "RESULT: ATTENTION NEEDED")
         return 0 if result.ok else 1
     conn = db.connect(settings.database_url)
+    # report and summary print JSON rows on stdout for a pipe, so they name the database on stderr
+    _name_database(settings, sys.stderr if args.command in ("report", "summary") else sys.stdout)
     try:
         if args.command == "check":
             return cmd_check(conn)
@@ -94,6 +97,11 @@ def _run_command(argv: list[str] | None) -> int:
     finally:
         conn.close()
     return 2
+
+
+def _name_database(settings: Settings, stream=None) -> None:
+    """The first line of every command: which database it uses, so a green run can never pass for one against another."""
+    print(f"database: {db.describe(settings.database_url)}", file=stream or sys.stdout)
 
 
 def cmd_check(conn) -> int:

@@ -114,8 +114,10 @@ reads an inactive company's filings, so clear or accept its open findings before
 | `overdue_reports` (soft) | the company is late or EDGAR is quiet. Check the company's filing index; a timely `NT 10-K` already extended the deadline. Nothing to fix in the job unless every company is "overdue" at once (then the fetch is broken) |
 | `labels_far_from_calendar` (soft) | informational unless the count grows; new items need a look at the filing |
 
-`make check` reprints the latest run's stored checks without fetching or re-evaluating, and fails
-if no successful run started today (UTC). Use it when the scheduler's log is gone.
+Every command's first line names the database it used (`database: host:port/name`; `report` and `summary` say it on
+stderr so their JSON stays clean): read it before the checks, a green run against the wrong database is otherwise
+indistinguishable from a good one. `make check` reprints the latest run's stored checks without fetching or
+re-evaluating, and fails if no successful run started today (UTC). Use it when the scheduler's log is gone.
 
 `error: cannot connect to the database at HOST:PORT` means the run never started: there is no `runs` row and no checks.
 Docker saying `Healthy` does not rule it out, because that check runs inside the container. If another program held the

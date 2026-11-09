@@ -28,10 +28,25 @@ def connect(database_url: str) -> psycopg.Connection:
         raise DatabaseUnavailable(_unreachable_message(database_url, exc)) from None
 
 
+def describe(database_url: str) -> str:
+    """`host:port/database`, for the first line of every command's output: where the job connects, never as whom or
+    with what password. A string the driver cannot parse is named as such instead of raised, so the line can be
+    printed before the connection attempt and the connection error still follows."""
+    try:
+        info = conninfo_to_dict(database_url)
+    except psycopg.ProgrammingError:
+        return "(invalid DATABASE_URL)"
+    host, port = _address(info)
+    return " ".join(f"{host}:{port}/{info.get('dbname') or 'default database'}".split())
+
+
+def _address(info: dict) -> tuple[str, str]:
+    return (info.get("host") or info.get("hostaddr") or "default host", info.get("port") or "default port")
+
+
 def _unreachable_message(database_url: str, exc: psycopg.OperationalError) -> str:
     info = conninfo_to_dict(database_url)
-    host = info.get("host") or info.get("hostaddr") or "default host"
-    port = info.get("port") or "default port"
+    host, port = _address(info)
     reason = str(exc).partition("\n")[0]
     if info.get("password"):
         reason = reason.replace(info["password"], "***")
