@@ -39,6 +39,7 @@ class RunResult:
     error: str | None = None
     fetch_errors: dict[int, str] = field(default_factory=dict)
     checks: list[checks_mod.CheckResult] = field(default_factory=list)
+    inputs: dict = field(default_factory=dict)      # loader.fingerprint_inputs: the files this run read
 
     @property
     def ok(self) -> bool:
@@ -68,6 +69,7 @@ def daily_run(settings: Settings, mode: str = "daily", client: EdgarClient | Non
     client = client or EdgarClient(settings.user_agent, settings.rate_limit_per_sec, settings.http_timeout, settings.max_retries)
     tickers = loader.load_companies(settings.companies_file)
     overrides = loader.Overrides.load(settings.overrides_file)
+    inputs = loader.fingerprint_inputs(settings.companies_file, settings.overrides_file)
 
     conn = db.connect(settings.database_url)
     try:
@@ -76,7 +78,7 @@ def daily_run(settings: Settings, mode: str = "daily", client: EdgarClient | Non
             cur.execute("INSERT INTO runs (mode) VALUES (%s) RETURNING id", (mode,))
             run_id = cur.fetchone()["id"]
         conn.commit()
-        result = RunResult(run_id=run_id, mode=mode, status="running")
+        result = RunResult(run_id=run_id, mode=mode, status="running", inputs=inputs)
         loaded = None
         try:
             loaded = _load_everything(conn, client, run_id, tickers, overrides, mode == "backfill", full, today, result)
@@ -174,7 +176,7 @@ def _close_run(conn: psycopg.Connection, r: RunResult) -> None:
             (r.status, (not checks_mod.hard_failures(r.checks)) if r.status == "ok" else None, r.requests, r.http_errors,
              r.ciks_expected, r.ciks_fetched, r.filings_seen, r.filings_inserted, r.filings_updated, r.error,
              Jsonb({"relabelled": r.relabelled, "duration_sec": round(r.duration_sec, 1),
-                    "fetch_errors": {str(k): v for k, v in r.fetch_errors.items()}}),
+                    "fetch_errors": {str(k): v for k, v in r.fetch_errors.items()}, "inputs": r.inputs}),
              r.run_id),
         )
     conn.commit()

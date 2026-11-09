@@ -33,7 +33,8 @@ moves it, data included. `SEC_USER_AGENT`,
 make report TICKER=AAPL YEAR=2009 PERIOD=FY    # what do we have for Apple's 2009 annual report? one row
 make report TICKER=WMT YEAR=2027 PERIOD=Q1     # a quarter (fiscal year = the calendar year in which the year ends)
 make summary                                   # one line per company
-make check                                     # the latest run's stored checks, no fetching, plus "did it run today"
+make check                                     # the latest run's stored checks, no fetching, plus "did it run today" and
+                                               # "did companies.csv or overrides.toml change since" (its checks used the old files)
 make verify-labels                             # reload the SEC's own XBRL labels for every filer; fails on a real disagreement
 make backfill                                  # re-read the history of filers with a coverage gap (FULL=1: of every filer)
 make help                                      # all of the above

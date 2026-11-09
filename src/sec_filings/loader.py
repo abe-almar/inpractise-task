@@ -43,6 +43,15 @@ def load_companies(path: Path) -> list[str]:
     return tickers
 
 
+def fingerprint_inputs(companies_file: Path, overrides_file: Path) -> dict[str, dict]:
+    """SHA-256 of the two input files as the run read them. Stored on the run row, so `make check` can tell whether
+    the stored checks were evaluated against the files that exist now. An absent overrides file has no digest."""
+    def one(path: Path) -> dict:
+        digest = hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
+        return {"path": path.name, "sha256": digest}
+    return {"companies_csv": one(companies_file), "overrides_toml": one(overrides_file)}
+
+
 @dataclass
 class Overrides:
     """Facts EDGAR does not carry, each with its evidence, from overrides.toml (see that file's comments)."""

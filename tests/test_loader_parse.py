@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -492,3 +493,15 @@ def test_validate_submissions_checks_every_page_column():
 def test_fixtures_pass_validation(file_name):
     page = load_fixture(file_name)
     assert validate_submissions(int(page["cik"]), page) is page["filings"]["recent"]
+
+
+def test_fingerprint_inputs_hashes_the_bytes_and_tolerates_a_missing_overrides_file(tmp_path: Path):
+    companies = tmp_path / "companies.csv"
+    companies.write_bytes(b"ticker\nAAPL\n")
+    first = loader.fingerprint_inputs(companies, tmp_path / "overrides.toml")
+    assert first == {"companies_csv": {"path": "companies.csv", "sha256": hashlib.sha256(b"ticker\nAAPL\n").hexdigest()},
+                     "overrides_toml": {"path": "overrides.toml", "sha256": None}}
+    (tmp_path / "overrides.toml").write_bytes(b"# nothing yet\n")
+    second = loader.fingerprint_inputs(companies, tmp_path / "overrides.toml")
+    assert second["companies_csv"] == first["companies_csv"]
+    assert second["overrides_toml"] == {"path": "overrides.toml", "sha256": hashlib.sha256(b"# nothing yet\n").hexdigest()}

@@ -234,3 +234,16 @@ docs/evidence/       probes, run logs, cover-page checks, tools; docs/review-evi
 - Check: `make report TICKER=AAPL YEAR=1997 PERIOD=Q2`; the replay test.
 - History: found by the fresh-agent test, which stopped on the Disney filing because the kit had no way to express
   the correction.
+
+## D16. Each run records the inputs it read (2026-11-09)
+
+- Every run stores the SHA-256 of `companies.csv` and `overrides.toml` as it read them, in `runs.notes->'inputs'`
+  (`loader.fingerprint_inputs`). The checks of a run were evaluated against those files: an acceptance added to
+  `overrides.toml` afterwards does not change what the stored checks say. `make check` therefore compares the files
+  that exist now with the run's fingerprints and says `inputs_unchanged` ok, or warns which file changed and that
+  `make run` re-evaluates the checks. A warning, never a failure: the run's own verdict stands, and an edit after a
+  green run is not a wrong run. Runs from before this entry report that they recorded no fingerprints.
+- Rejected: two dedicated columns on `runs` (a migration for two values that `notes` already has room for); storing
+  the files' content keyed by hash, as `source_snapshots` does for EDGAR pages (a table and a migration, and both
+  files live in git, where the hash finds the exact version).
+- Check: `tests/test_replay_db.py` (the notes of run 1); `tests/test_cli.py` (ok, warning and pre-entry run).

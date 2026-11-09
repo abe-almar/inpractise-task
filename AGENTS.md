@@ -117,7 +117,9 @@ reads an inactive company's filings, so clear or accept its open findings before
 Every command's first line names the database it used (`database: host:port/name`; `report` and `summary` say it on
 stderr so their JSON stays clean): read it before the checks, a green run against the wrong database is otherwise
 indistinguishable from a good one. `make check` reprints the latest run's stored checks without fetching or
-re-evaluating, and fails if no successful run started today (UTC). Use it when the scheduler's log is gone.
+re-evaluating, fails if no successful run started today (UTC), and warns when `companies.csv` or `overrides.toml`
+changed since that run (every run records their SHA-256 in `runs.notes`; the stored checks were evaluated against the
+old files, the next `make run` re-evaluates them). Use it when the scheduler's log is gone.
 
 `error: cannot connect to the database at HOST:PORT` means the run never started: there is no `runs` row and no checks.
 Docker saying `Healthy` does not rule it out, because that check runs inside the container. If another program held the

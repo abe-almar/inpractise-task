@@ -4,7 +4,9 @@ If tomorrow's 06:00 run is wrong, what tells us? Not the exit code of a crash: a
 wrong. So every run ends by evaluating sixteen named conditions against the database and recording them in the
 `checks` table, and the process exits 0 only when the run completed **and** every hard check passed. The scheduler
 alerts on a non-zero exit; a person (or an agent) then runs `make check`, which prints the latest run's
-stored checks without touching EDGAR, and adds one condition of its own: that a successful run started today.
+stored checks without touching EDGAR, and adds two conditions of its own: that a successful run started today, and
+whether `companies.csv` and `overrides.toml` are still the files that run read (each run records their SHA-256; the
+stored checks were evaluated against those, so a change is a warning that the next run re-evaluates them).
 
 ## What "wrong" means here
 

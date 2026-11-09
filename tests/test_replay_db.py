@@ -311,7 +311,8 @@ def test_replay_ten_runs(schema, settings, tmp_path: Path):
     assert conn.execute("SELECT count(*) AS n FROM filings WHERE fiscal_year IS NULL").fetchone()["n"] == 0
     assert conn.execute("SELECT count(*) AS n FROM source_snapshots").fetchone()["n"] == 3
     assert conn.execute("SELECT count(*) AS n FROM sec_labels").fetchone()["n"] == len(xbrl_reports)
-    assert _notes(conn, r1.run_id) == {"relabelled": unique_rows, "duration_sec": _notes(conn, r1.run_id)["duration_sec"], "fetch_errors": {}}
+    assert _notes(conn, r1.run_id) == {"relabelled": unique_rows, "duration_sec": _notes(conn, r1.run_id)["duration_sec"], "fetch_errors": {},
+                                       "inputs": loader.fingerprint_inputs(settings.companies_file, settings.overrides_file)}
     c1 = _checks(conn, r1.run_id)
     assert c1["history_gap"]["passed"] is True and c1["history_gap"]["summary"] == NO_GAP and c1["history_gap"]["detail"] == {"items": []}
     assert c1["sec_labels_refreshed"]["summary"] == "SEC labels refreshed for 3 filer(s)"

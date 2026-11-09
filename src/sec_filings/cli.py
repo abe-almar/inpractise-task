@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from sec_filings import checks as checks_mod
-from sec_filings import db, report
+from sec_filings import db, loader, report
 from sec_filings.edgar import EdgarClient
 from sec_filings.flow import daily_run
 from sec_filings.settings import Settings, SettingsError, load_dotenv
@@ -67,7 +67,7 @@ def _run_command(argv: list[str] | None) -> int:
     _name_database(settings, sys.stderr if args.command in ("report", "summary") else sys.stdout)
     try:
         if args.command == "check":
-            return cmd_check(conn)
+            return cmd_check(conn, settings)
         if args.command == "verify-labels":
             from sec_filings.loader import Overrides
             from sec_filings.verify import verify_labels
@@ -104,7 +104,25 @@ def _name_database(settings: Settings, stream=None) -> None:
     print(f"database: {db.describe(settings.database_url)}", file=stream or sys.stdout)
 
 
-def cmd_check(conn) -> int:
+def _inputs_line(run: dict, settings: Settings) -> str:
+    """Whether companies.csv and overrides.toml are still the files the run read: its stored checks were evaluated
+    against those. A change is a warning, never a failure; the run's verdict stands and the next run reads the new files."""
+    recorded = (run.get("notes") or {}).get("inputs")
+    if not recorded:
+        return "[info] inputs_unchanged: this run recorded no input fingerprints"
+    current = loader.fingerprint_inputs(settings.companies_file, settings.overrides_file)
+
+    def short(digest: str | None) -> str:
+        return digest[:12] if digest else "none"
+
+    changed = [f"{now['path']} changed since this run (sha256 {short((recorded.get(key) or {}).get('sha256'))} -> {short(now['sha256'])})"
+               for key, now in current.items() if (recorded.get(key) or {}).get("sha256") != now["sha256"]]
+    if not changed:
+        return f"[ok] inputs_unchanged: {' and '.join(v['path'] for v in current.values())} are the files this run read"
+    return "[WARN] inputs_unchanged: " + "; ".join(changed) + "; the stored checks were evaluated against the old file, `make run` re-evaluates them"
+
+
+def cmd_check(conn, settings: Settings) -> int:
     run = report.latest_run(conn)
     if run is None:
         print("no run on record")
@@ -117,6 +135,7 @@ def cmd_check(conn) -> int:
     print(f"latest run {run['id']} ({run['mode']}) started {run['started_at']:%Y-%m-%d %H:%M %Z} status={run['status']} "
           f"filers={run['ciks_fetched']}/{run['ciks_expected']} new filings={run['filings_inserted']} errors={run['http_errors']}")
     print(f"[{'ok' if ran_today else 'FAIL'}] ran_today: " + ("a successful run started today (UTC)" if ran_today else "no successful run today; the scheduler did not run it, or it failed"))
+    print(_inputs_line(run, settings))
     if run["error"]:
         print(f"error: {run['error']}")
     print(checks_mod.format_results(results))

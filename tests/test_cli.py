@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import re
 import socket
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
 import psycopg
 
-from sec_filings import cli, db
+from sec_filings import cli, db, loader
 from sec_filings.flow import RunResult
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -115,3 +116,28 @@ def test_every_command_names_the_database_it_uses(monkeypatch, capsys):
     assert cli.main(["summary"]) == 0
     captured = capsys.readouterr()
     assert captured.out == "" and captured.err.strip() == line      # the JSON commands keep stdout for the rows
+
+
+def test_check_says_whether_the_inputs_changed_since_the_run(monkeypatch, capsys):
+    """The stored checks were evaluated against the companies.csv and overrides.toml of that moment."""
+    monkeypatch.chdir(ROOT)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://sec:sec@localhost:25432/sec_filings")
+    monkeypatch.setattr(cli.db, "connect", lambda url: _Closable())
+    monkeypatch.setattr(cli.report, "checks_of_run", lambda conn, run_id: [])
+    current = loader.fingerprint_inputs(ROOT / "companies.csv", ROOT / "overrides.toml")
+    run = {"id": 7, "mode": "daily", "started_at": datetime.now(timezone.utc), "status": "ok", "ciks_fetched": 21,
+           "ciks_expected": 21, "filings_inserted": 0, "http_errors": 0, "error": None, "notes": {"inputs": current}}
+    monkeypatch.setattr(cli.report, "latest_run", lambda conn: run)
+
+    assert cli.main(["check"]) == 0
+    assert "[ok] inputs_unchanged: companies.csv and overrides.toml are the files this run read" in capsys.readouterr().out.splitlines()
+
+    run["notes"] = {"inputs": {**current, "overrides_toml": {"path": "overrides.toml", "sha256": "0" * 64}}}
+    assert cli.main(["check"]) == 0                                     # a warning, never an exit code
+    warnings = [line for line in capsys.readouterr().out.splitlines() if line.startswith("[WARN] inputs_unchanged")]
+    assert len(warnings) == 1
+    assert "overrides.toml changed since this run (sha256 000000000000 -> " in warnings[0] and "companies.csv changed" not in warnings[0]
+
+    run["notes"] = {}
+    assert cli.main(["check"]) == 0
+    assert "[info] inputs_unchanged: this run recorded no input fingerprints" in capsys.readouterr().out.splitlines()
