@@ -82,6 +82,9 @@ that day. Evidence lives in `docs/evidence/`, review reports in `docs/review-evi
 - History: the schema grew through seven migrations during the review passes (co-registrants, bookkeeping,
   corrections, coverage, refresh queue) and was collapsed into one file in the final simplification pass; the git
   history keeps the sequence.
+- History (2026-11-09): the snapshot store still repaired page bodies that a version before the collapse had stored
+  trimmed. No database built from the one schema file ever held one (`body` is `NOT NULL` and written whole), so the
+  repair and its test went; a repeated page only records the run that saw it.
 
 ## D5. History once per filer, incremental every morning, never delete
 
@@ -109,6 +112,8 @@ that day. Evidence lives in `docs/evidence/`, review reports in `docs/review-evi
 - History: review passes 2 to 4 each broke the previous version of this rule: a run-level "last good run" baseline
   faded the alarm, then blocked recovery, then its initialisation cleared an inherited gap. The watermark replaced it.
   Pass 7 found history pages were not validated at all: an empty one counted as read, and the filer was never read again.
+- History (2026-11-09): `report.previous_clean_run`, the query behind the retired run-level baseline, had survived as
+  a helper that only the replay test called; removed. `runs.checks_passed` stays, as the record of each run's verdict.
 
 ## D6. Talking to EDGAR
 

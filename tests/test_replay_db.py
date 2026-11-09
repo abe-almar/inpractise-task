@@ -8,7 +8,6 @@ No network: every page, and every companyfacts document, comes from the fixtures
 from __future__ import annotations
 
 import copy
-import hashlib
 import json
 import os
 import secrets
@@ -492,8 +491,7 @@ def test_replay_ten_runs(schema, settings, tmp_path: Path):
     assert [(i["key"], i["new_this_run"], i["not_seen_since"]) for i in c4["no_filings_lost"]["detail"]["items"]] == [(gone, False, str(TODAY))]
     assert conn.execute("SELECT not_seen_since FROM filings WHERE accession_number = %s", (gone,)).fetchone()["not_seen_since"] == TODAY
     assert conn.execute("SELECT count(*) AS n FROM source_snapshots").fetchone()["n"] == 4
-    # the failed runs do not count as clean runs, but the watermark still advances: the pages overlap it
-    assert report.previous_clean_run(conn)["id"] == r2.run_id
+    # the watermark still advances: the pages overlap it
     assert _coverage(conn) == {AAPL: (TODAY + timedelta(days=1), None), XOM_NEW: (TODAY + timedelta(days=1), None), XOM_OLD: (TODAY + timedelta(days=1), None)}
 
     # ======================================================================= run 5: it is back, and the correction is withdrawn
@@ -521,8 +519,6 @@ def test_replay_ten_runs(schema, settings, tmp_path: Path):
 
     # ======================================================================= run 6: correction back; the holding company's watermark is old
     settings.overrides_file.write_text(XOM_OVERRIDE_TOML + CORRECTION_TOML, encoding="utf-8")
-    assert report.previous_clean_run(conn)["id"] == r2.run_id                 # runs 3-5 completed but failed their checks
-    assert report.previous_clean_run(conn, before_run_id=r2.run_id)["id"] == r1.run_id
     conn.execute("UPDATE filers SET coverage_through = %s WHERE cik = %s", (date(2026, 1, 1), XOM_NEW))
     r6, _ = run("daily", TODAY + timedelta(days=3))
     assert r6.status == "ok" and r6.relabelled == 1
@@ -590,7 +586,6 @@ def test_replay_ten_runs(schema, settings, tmp_path: Path):
     assert _coverage(conn) == {AAPL: (TODAY + timedelta(days=6), None), XOM_OLD: (TODAY + timedelta(days=6), None),
                                XOM_NEW: (TODAY + timedelta(days=6), None)}
     assert conn.execute("SELECT count(*) AS n FROM source_snapshots WHERE cik = %s AND page <> 'recent'", (XOM_NEW,)).fetchone()["n"] == 1
-    assert report.previous_clean_run(conn)["id"] == r9.run_id
 
     # ======================================================================= run 10: daily, clean
     r10, calls = run("daily", TODAY + timedelta(days=7))
@@ -645,12 +640,11 @@ def test_coverage_gap_is_persistent_until_a_history_read(schema, tmp_path: Path)
     assert c3["summary"].endswith(GAP_REMEDY)
     assert _coverage(conn) == {AAPL: (day(2), None), XOM_OLD: (day(2), None), XOM_NEW: (date(2026, 1, 1), day(2))}
 
-    # another daily: still failing, same gap date; the failed runs are not clean runs
+    # another daily: still failing, same gap date
     r4 = daily_run(settings, mode="daily", client=client, today=day(3))
     assert _hard_failures(r4) == ["history_gap"]
     assert _checks(conn, r4.run_id)["history_gap"]["detail"]["items"][0]["gap_since"] == str(day(2))
     assert _coverage(conn)[XOM_NEW] == (date(2026, 1, 1), day(2))
-    assert report.previous_clean_run(conn)["id"] == r2.run_id
     assert _url_kinds(client)["history"] == 3
 
     # a plain backfill (not --full) re-reads the history of the gapped filer only, and clears the gap
@@ -659,7 +653,6 @@ def test_coverage_gap_is_persistent_until_a_history_read(schema, tmp_path: Path)
     assert _history_urls(client)[3:] == [names[XOM_NEW]]
     assert _coverage(conn) == {cik: (day(4), None) for cik in (AAPL, XOM_NEW, XOM_OLD)}
     assert _checks(conn, r5.run_id)["history_gap"]["summary"] == NO_GAP
-    assert report.previous_clean_run(conn)["id"] == r5.run_id
 
     # daily again: passes, the watermark advances
     r6 = daily_run(settings, mode="daily", client=client, today=day(5))
@@ -1012,35 +1005,25 @@ def test_seen_this_run_protects_co_filed_accessions(schema):
     assert flag(own_acc) == TODAY
 
 
-# ----------------------------------------------------------------------------- snapshots: repairing a trimmed body
+# ----------------------------------------------------------------------------- snapshots: a repeated page
 
-def test_snapshot_repairs_a_legacy_trimmed_body_on_the_same_hash(schema):
+def test_snapshot_with_the_same_hash_only_records_the_run(schema):
     _, conn = schema
     page = load_fixture(FIXTURE_FILES["WMT"])
     cik = int(page["cik"])
     client = FakeEdgarClient({cik: page})
     run1 = conn.execute("INSERT INTO runs (mode) VALUES ('daily') RETURNING id").fetchone()["id"]
+    first = loader.ingest_filer(conn, client, run1, cik, backfill=False, overrides_fye=None, today=TODAY)
+    assert first.snapshot_changed is True
+    # whatever the stored body holds is left alone when the same content comes back: only the run that saw it moves
+    conn.execute("UPDATE source_snapshots SET body = body || '{\"marker\": true}'::jsonb WHERE cik = %s", (cik,))
     run2 = conn.execute("INSERT INTO runs (mode) VALUES ('daily') RETURNING id").fetchone()["id"]
-    digest = hashlib.sha256(raw_of(page)).hexdigest()
-    # an earlier version stored only the recent block under the same hash
-    legacy = {"filings": {"recent": page["filings"]["recent"]}, "name": page["name"], "fiscalYearEnd": page["fiscalYearEnd"], "category": page["category"]}
-    conn.execute("INSERT INTO source_snapshots (cik, page, sha256, run_id, last_seen_run, body) VALUES (%s, 'recent', %s, %s, %s, %s)",
-                 (cik, digest, run1, run1, json.dumps(legacy)))
-
-    result = loader.ingest_filer(conn, client, run2, cik, backfill=False, overrides_fye=None, today=TODAY)
-    assert result.snapshot_changed is False                 # same content: no new row
+    again = loader.ingest_filer(conn, client, run2, cik, backfill=False, overrides_fye=None, today=TODAY)
+    assert again.snapshot_changed is False
     rows = conn.execute("SELECT run_id, last_seen_run, body FROM source_snapshots WHERE cik = %s", (cik,)).fetchall()
     assert len(rows) == 1
     assert (rows[0]["run_id"], rows[0]["last_seen_run"]) == (run1, run2)
-    assert rows[0]["body"]["cik"] == page["cik"] and rows[0]["body"]["tickers"] == page["tickers"]   # repaired to the full page
-    assert rows[0]["body"]["filings"]["recent"]["accessionNumber"] == page["filings"]["recent"]["accessionNumber"]
-
-    # a full body is left exactly as it is
-    conn.execute("UPDATE source_snapshots SET body = body || '{\"marker\": true}'::jsonb WHERE cik = %s", (cik,))
-    run3 = conn.execute("INSERT INTO runs (mode) VALUES ('daily') RETURNING id").fetchone()["id"]
-    loader.ingest_filer(conn, client, run3, cik, backfill=False, overrides_fye=None, today=TODAY)
-    row = conn.execute("SELECT last_seen_run, body FROM source_snapshots WHERE cik = %s", (cik,)).fetchone()
-    assert row["last_seen_run"] == run3 and row["body"]["marker"] is True
+    assert rows[0]["body"]["marker"] is True and rows[0]["body"]["cik"] == page["cik"]
 
 
 # ----------------------------------------------------------------------------- SEC labels: refresh and judgement

@@ -421,9 +421,8 @@ def _store_snapshot(conn: psycopg.Connection, cik: int, page: str, run_id: int, 
         cur.execute("SELECT id, sha256 FROM source_snapshots WHERE cik = %s AND page = %s ORDER BY fetched_at DESC LIMIT 1", (cik, page))
         last = cur.fetchone()
         if last and last["sha256"] == digest:
-            # same content: note the observation (and fill in a body an older version stored trimmed)
-            cur.execute("UPDATE source_snapshots SET last_seen_run = %s, body = CASE WHEN body ? 'cik' THEN body ELSE %s END WHERE id = %s",
-                        (run_id, Jsonb(body), last["id"]))
+            # same content: record that this run saw it too
+            cur.execute("UPDATE source_snapshots SET last_seen_run = %s WHERE id = %s", (run_id, last["id"]))
             return False
         cur.execute(
             "INSERT INTO source_snapshots (cik, page, sha256, run_id, last_seen_run, body) VALUES (%s, %s, %s, %s, %s, %s) "
