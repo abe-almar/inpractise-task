@@ -1,4 +1,4 @@
-"""Replay tests (docs/decisions.md D5 and D10) against a fresh Postgres schema with a fake EDGAR client that serves
+"""Replay tests against a fresh Postgres schema with a fake EDGAR client that serves
 the trimmed real pages in tests/fixtures. Runs only when TEST_DATABASE_URL is set, for example
 
     TEST_DATABASE_URL=postgresql://sec:sec@localhost:25432/sec_filings pytest tests/test_replay_db.py
@@ -433,7 +433,7 @@ def test_replay_ten_runs(schema, settings, tmp_path: Path):
     q3 = report.answer(conn, "XOM", 2026, "Q3")
     assert len(q3) == 1 and q3[0]["cik"] == XOM_NEW and q3[0]["accession_number"] == "0002115436-26-000020"
     # The 2026 Q2 10-Q is one combined filing (accession prefix 0000034088, the old CIK's) that both pages list
-    # (D2, revised). One accession is one row: it stays with the holding company, which is ingested first as the
+    # One accession is one row: it stays with the holding company, which is ingested first as the
     # current CIK; the old CIK's page only adds itself to also_filed_by_ciks and leaves the metadata alone.
     q2 = report.answer(conn, "XOM", 2026, "Q2")
     assert len(q2) == 1

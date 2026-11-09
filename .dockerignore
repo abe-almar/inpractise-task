@@ -7,5 +7,4 @@ __pycache__
 *.egg-info
 docs/
 tests/
-brief.md
-agent-logs/
+scripts/

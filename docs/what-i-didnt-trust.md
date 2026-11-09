@@ -1,34 +1,30 @@
-# What I didn't trust
+# What could still go wrong
 
-The agents: a Claude Code session doing the work, a sub-agent writing tests, two Hermes profiles auditing and
-reviewing. Where they, and I, were wrong, and what it was checked against.
+These are potential failures that the current checks may not catch or prevent. The scheduler is assumed to
+notify us about missed starts, hangs and failed jobs.
 
-**Exxon's two CIKs.** My probe note said both had filed a Q2 2026 10-Q. The backfill found the same accession number
-on both pages: one filing by two registrants, now an `also_filed_by_ciks` column, not a second row.
+**A warning could be missed because the job still reports success.** Overdue reports, unusual fiscal dates and
+recovered HTTP errors produce warnings but allow `RESULT: OK` and exit 0. If we only look at failed jobs, a
+warning about missing data could go unnoticed. New warnings need review alongside failures.
 
-**Two "original" annual reports for one year, at four companies.** For 19 old filings EDGAR's "period of report" is
-the filing date; GE's 10-K filed 2015-02-27 says "fiscal year ended December 31, 2014" on its cover. Fix: label from
-the last period end before the filing date.
+**SEC could return incomplete or outdated data that looks valid.** The job cannot reliably detect a filing
+that SEC has never listed in the feed. Daily runs also do not reread every historical page, so older changes
+could remain unnoticed. Periodic `make backfill FULL=1` would pick up changes present in those pages, but cannot
+prove that SEC's source is complete.
 
-**The SEC's own labels disagreed on 106 of 1,017 filings.** 101 are issuers naming the year by its start; four are SEC
-errors, checked on the cover pages. One rule, the SEC label kept beside it, conventions listed with evidence.
+**A report could be assigned the wrong fiscal year or quarter.** Comparing our labels with SEC's does not
+guarantee correctness: both can share an error. Reports without XBRL data lack that comparison, and new XBRL
+reports get 21 days for missing SEC labels to arrive. Existing SEC labels are reused between refreshes, so a
+correction may not be picked up immediately. Periodic `make verify-labels` and checking report covers reduce
+this risk.
 
-**A keyword classifier called Tesla's Part III amendments "restatements".** Reading each explanatory note instead:
-one of 33 amendments in ten years restated anything.
+**A configuration change could quietly reduce coverage or hide a problem.** Accidentally removing a company
+from `companies.csv` changes what the job expects to track, so the smaller scope can still pass. Accepted
+exceptions in `overrides.toml` have no expiry and match a check and key; a different problem with the same key
+could also be suppressed. Company-list changes need review, and exceptions need to be rechecked against their
+supporting evidence.
 
-**The adversarial reviewer failed the work four times.** Pass 1: the disappearance alarm fired once and went quiet, an
-empty EDGAR page counted as fetched, and a lenient label check would have excused an off-by-one in my own rule. Passes
-2 to 4 each caught a defect in the previous fix to the outage baseline, now a per-filer watermark exercised live
-(`docs/evidence/outage-recovery-2026-11-07.log`).
-
-**The one command on an empty database.** Every reviewer followed the README's first step, `backfill`; nobody ran
-`make run` on nothing. I did: `RESULT: OK`, 557 of 1,800 filings, no Apple 2009. A filer's first run now reads its
-history.
-
-**What held up.** An audit through the www.sec.gov Atom feeds matched all 183 accession numbers, forms and dates it
-sampled.
-
-**Data decisions** (`docs/decisions.md`): annual = 10-K family and 20-F, quarterly = 10-Q family, 6-K excluded, so the
-five foreign filers have no quarterly rows; a company is a set of CIKs, not a ticker; one fiscal-year rule for
-everyone, conventions and corrections listed with evidence; nothing is deleted, a vanished filing stays flagged until a
-person decides; every fact EDGAR lacks and every accepted finding is in `overrides.toml` with its evidence.
+**A failed job could leave data that appears fully updated.** Each company's successful updates are saved
+separately. If a later step fails, queries can still return a mixture of fresh and older data. Before treating
+the table as a complete refresh, consumers need to check the latest run's overall verdict, including its hard
+checks. The execution status `ok` alone does not establish that the data passed those checks.

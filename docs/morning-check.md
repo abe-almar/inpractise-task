@@ -1,65 +1,53 @@
 # The morning check
 
-If tomorrow's 06:00 run is wrong, what tells us? Not the exit code of a crash: a run can finish green and still be
-wrong. So every run ends by evaluating sixteen named conditions against the database and recording them in the
-`checks` table, and the process exits 0 only when the run completed **and** every hard check passed. The scheduler
-alerts on a non-zero exit; a person (or an agent) then runs `make check`, which prints the latest run's
-stored checks without touching EDGAR, and adds two conditions of its own: that a successful run started today, and
-whether `companies.csv` and `overrides.toml` are still the files that run read (each run records their SHA-256; the
-stored checks were evaluated against those, so a change is a warning that the next run re-evaluates them).
+Every `make run` checks the fetched data and the stored filings against sixteen conditions, then saves the results
+in the `checks` table. It exits 0 only when execution completed and every hard check passed. The scheduler is
+responsible for notifying us about missed starts, hangs and failed jobs; these checks identify data problems in a
+run that reached the end of its work.
 
-## What "wrong" means here
+Hard failures print `[FAIL]` and produce `RESULT: ATTENTION NEEDED`. Soft failures print `[WARN]` but still allow
+exit 0, so new warnings need review alongside failures. Informational checks report news without failing the run.
+The `runs.status = 'ok'` execution status alone is insufficient: `runs.checks_passed` must also be true.
 
-| check | severity | it fails when | why that would be wrong |
-|---|---|---|---|
-| `run_complete` | hard | a filer page could not be fetched, is for another CIK, has an empty or inconsistent recent block, or is a history page without the filings advertised for it | a partial or empty page looks like "no news" |
-| `tickers_resolved` | hard | a ticker in `companies.csv` is not in `company_tickers.json` and has no evidenced CIK override | the company would silently stop being tracked |
-| `cik_changes_acknowledged` | hard | a ticker now maps to a different CIK than before, and nobody has recorded the old CIK in `overrides.toml` | Exxon did exactly this on 2026-07-01; a job keyed on the new CIK loses thirty years |
-| `fiscal_year_end_known` | hard | a filer has no fiscal year end in EDGAR and no override | no label can be derived (Alibaba's is null in EDGAR) |
-| `history_gap` | hard | a filer has a coverage gap on record: its recent page started after the filer's coverage watermark (the date through which its filings are known complete, advanced only by a page that overlaps it or by a history read); the gap stays until that filer's history is read again (`make backfill`) | filings could have entered and left the page during the outage; a later run merely reaching its checks does not bridge it (`docs/evidence/outage-recovery-2026-11-07.log`) |
-| `sec_labels_refreshed` | hard | the refresh of the SEC's XBRL labels failed for a filer | the cross-check would silently stop covering new filings; the refresh is retried every run while a filing is unlabelled |
-| `no_filings_lost` | hard | any filing we have seen is no longer listed in the window the page covers, until it reappears or is accepted | EDGAR does delete after acceptance; the row stays, flagged, and someone decides; the alarm does not fade after one morning |
-| `labels_complete` | hard | a report has no fiscal year, period or method | the one-row question cannot be answered |
-| `labels_unique` | hard | two original reports share (company, year, period) under one CIK | two answers to the one-row question; the first backfill found four, all EDGAR metadata quirks; the fresh agent found a fifth (Disney, period a year off) |
-| `labels_inferred_for_amendments` | hard | an amendment's EDGAR period is its filing date and its label came from inference, not yet read and accepted | the inference pointed at the wrong quarter once (Apple, 1997) |
-| `labels_match_sec` | hard | our label and the SEC's XBRL label disagree in a way that is not a listed naming convention or an accepted finding, or an XBRL-era filing older than three weeks still has no SEC label | either an SEC data error or ours; both get a look; a missing label is verification that never happened |
-| `http_health` | soft | EDGAR returned errors (even if retries succeeded) or the run took longer than the budget | an early sign of rate limiting or an outage |
-| `labels_unique_across_ciks` | soft | two CIKs of the same company both filed an original for one period | normal in a reorganisation year; worth a look |
-| `labels_far_from_calendar` | soft | a report's period of report is not on the company's fiscal calendar | the label is best effort; most cases are EDGAR storing the filing date as the period |
-| `overdue_reports` | soft | a company is past the statutory deadline for its next report and EDGAR shows nothing | either the company is late (news) or the job stopped seeing new filings (a bug) |
-| `news` | info | never fails | the new filings, amendments and late-filing notices of the run, and which filers had their SEC labels refreshed |
+| Check | Severity | What it flags |
+|---|---|---|
+| `run_complete` | Hard | A filer was not fetched successfully, or a page failed validation: wrong CIK, empty or inconsistent recent data, or a history page with the wrong filing count. |
+| `tickers_resolved` | Hard | A requested ticker is absent from the SEC ticker map and has no current CIK override. |
+| `cik_changes_acknowledged` | Hard | A ticker moved to another CIK and the previous CIK has not been recorded in `overrides.toml`. Both remain tracked. |
+| `fiscal_year_end_known` | Hard | A filer has no usable fiscal year end in its metadata or an override. |
+| `history_gap` | Hard | The recent page starts after the date through which coverage was established. The gap persists until `make backfill` reads that filer's history. |
+| `sec_labels_refreshed` | Hard | A required refresh of SEC XBRL labels failed. Unlabelled filings cause another attempt on a later run. |
+| `no_filings_lost` | Hard | A previously seen filing disappeared from the checked window. It stays stored and flagged until it reappears or the finding is accepted. Normal movement into an archive is checked before flagging it. |
+| `labels_complete` | Hard | An annual or quarterly report lacks a usable fiscal year, period or labelling method. |
+| `labels_unique` | Hard | Multiple original reports share a company, CIK, family, fiscal year and period. |
+| `labels_inferred_for_amendments` | Hard | An amendment's label was inferred from its filing date and has not been checked against the document. |
+| `labels_match_sec` | Hard | Our fiscal label disagrees with SEC's outside a documented naming convention, or an XBRL report has lacked a SEC label for at least 21 days. |
+| `http_health` | Soft | EDGAR requests encountered errors, even if retries recovered, or execution exceeded the 600-second budget. This budget is a warning threshold, not a timeout. |
+| `labels_unique_across_ciks` | Soft | Different CIKs of one company filed different originals for the same period. |
+| `labels_far_from_calendar` | Soft | A period end is too far from the fiscal calendar for a reliable label. Filing-date inferences are also listed for information. |
+| `overdue_reports` | Soft | The next expected report is past its estimated filing deadline, or a Canadian `40-F` deadline needs a Canadian filing calendar. |
+| `news` | Info | New filings, amendments and late-filing notices, plus SEC-label refresh results. |
 
-Findings a person has examined and accepted are listed in `overrides.toml` under `[[accepted_findings]]` with the
-check name, the key the check printed and what was read; they are reported as information instead of failing. The
-whole item list is evaluated against the acceptances, never a truncation. Nothing is auto-accepted, naming
-conventions included: a company counts as "naming its year by the start" only when listed with evidence.
+To investigate a failure:
 
-## The 06:00 run, concretely
+1. Read the database address and run ID in the output, then the `[FAIL]` items. If the log is unavailable, run
+   `make check` to print the latest run's stored results without fetching from EDGAR or re-evaluating the data.
+2. Retry `make run` after a temporary fetch failure. Use `make backfill` for a recorded coverage gap. For a fiscal
+   label or CIK finding, inspect the source document and follow the [handover kit](../AGENTS.md); record corrections
+   and reviewed exceptions in `overrides.toml`.
+3. Run `make run` again after changing inputs or corrections, and confirm `RESULT: OK`. Review new `[WARN]` items
+   as well. `make check` alone cannot apply a changed input or refresh an earlier verdict.
 
-1. The scheduler runs `make run` and gets exit code 0 or non-zero.
-2. On non-zero, the alert carries the printed report. The first line names the database the run used, the second gives
-   the run id, filers fetched and validated, new filings and requests; each check follows with its items. `make check`
-   reprints it later. If the database cannot be reached there is no run and no report, only one `error:` line naming the
-   host and port.
-3. On 0, nobody has to look. The `news` line says what came in ("2 new filings, of which 1 amendment"), and whether
-   the SEC labels of the filers with news were refreshed for the cross-check.
+`make check` also fails unless the latest run started today UTC, completed successfully and passed its hard checks.
+This checks the calendar day; it does not establish that the scheduled 06:00 run happened. It warns when `companies.csv` or
+`overrides.toml` differs from the files used by that run, comparing their recorded SHA-256 hashes. A changed input
+does not alter the stored verdict or the exit code.
 
-## What this does not catch
+An exception after a run starts is recorded as a failed run when the database is available. A failure before the
+run starts, such as an unreachable database, has no new `runs` row; use the scheduler's failure log. A terminated
+process can leave a row marked `running`.
 
-- A filing EDGAR has not published yet. Filings accepted after 17:30 ET are disseminated the next business day, so
-  a 06:00 European run sees everything through the previous US business day. `overdue_reports` catches the case
-  where that silence lasts past the deadline.
-- A wrong fiscal year end in EDGAR for a company whose XBRL labels also follow it. `labels_far_from_calendar` would
-  still flag the off-calendar period ends.
-- A deletion outside the window the daily page covers (older than the oldest filing on the recent page). A
-  `make backfill FULL=1` re-reads every page and flags those too.
-- Federal holidays in the deadline arithmetic (weekends are handled), and the deadline of a 52/53-week quarter,
-  which is taken as thirteen weeks after the last report: a day or two of slack, which is why it is a soft check.
-- Changes in the content of a filing. The job tracks filings, not what is in them.
-
-## Trying it
-
-The checks ran clean on run 5 of 2026-11-07 (`docs/evidence/daily-run-5-2026-11-07.log`), after a review pass had
-shown that two of them could stay silent (`docs/review-evidence/`). To see a hard failure, rename a ticker in
-`companies.csv` to one that does not exist and run `make run`: `tickers_resolved` fails, the exit code is non-zero,
-and the next run with the ticker restored is green again.
+Accepted findings must name the check and item key under `[[accepted_findings]]` and explain what was examined.
+Accepted items remain in the stored check details; a fully accepted finding is reported as information. Nothing
+is accepted automatically. See [potential risks](what-i-didnt-trust.md) for what can still go wrong despite passing
+checks, including incomplete source data and partially updated data after a failure.

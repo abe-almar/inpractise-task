@@ -1,4 +1,4 @@
-"""The labelling rule of docs/decisions.md D3: fiscal year = calendar year in which the fiscal year ends; quarters
+"""The labelling rule: fiscal year = calendar year in which the nominal fiscal year ends; quarters
 counted from the previous year end; ten days of tolerance for 52/53-week calendars. Every (report date, FYE) pair
 below is a real one from the EDGAR pages in tests/fixtures unless the comment says otherwise."""
 
@@ -204,7 +204,7 @@ def test_fye_date_clips_february_29_in_common_years():
         (date(2024, 3, 31), -1, date(2024, 2, 29)),   # negative steps clip too
         (date(2024, 1, 15), -1, date(2023, 12, 15)),
         (date(2025, 6, 30), 0, date(2025, 6, 30)),
-        # a month end stays a month end (D3 revision 3: 30 June + 6 months is 31 December, not 30 December)
+        # a month end stays a month end (30 June + 6 months is 31 December, not 30 December)
         (date(2025, 6, 30), 6, date(2025, 12, 31)),
         (date(2025, 6, 30), 9, date(2026, 3, 31)),
         (date(2025, 2, 28), 1, date(2025, 3, 31)),    # 28 February is a month end in a common year
@@ -240,7 +240,7 @@ def test_nominal_period_ends(fye, year, expected):
     assert fiscal.nominal_period_ends(fye, year) == expected
 
 
-# ----------------------------------------------------------------------------- the filing-date fallback (D3 revision 1)
+# ----------------------------------------------------------------------------- the filing-date fallback
 
 def test_period_of_report_equal_to_the_filing_date_is_labelled_from_the_filing_date():
     # Apple's 10-Q/A filed 1997-10-07 carries 1997-10-07 as period of report (tests/fixtures/CIK0000320193.json)

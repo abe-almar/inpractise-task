@@ -1,5 +1,5 @@
 """EdgarClient against a fake HTTP session and an injected clock: retries, the hard stop, 404 and 4xx handling,
-the throttle and the fair-access headers (docs/decisions.md D6). Nothing here opens a socket."""
+the throttle and the fair-access headers. Nothing here opens a socket."""
 
 from __future__ import annotations
 

@@ -1,5 +1,5 @@
 """sec_labels_from_companyfacts: per accession, the (fy, fp) its XBRL facts agree on; facts of untracked forms are
-ignored (docs/decisions.md D3, the cross-check that is never the primary source)."""
+ignored. SEC labels are a cross-check, not the primary source."""
 
 from __future__ import annotations
 

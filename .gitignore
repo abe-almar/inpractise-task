@@ -4,11 +4,9 @@ __pycache__/
 .env
 .pytest_cache/
 .ruff_cache/
-docs/review-evidence/.usage-*.json
-docs/agent-runs/.usage-*.json
 *.egg-info/
 dist/
 build/
-docs/evidence/tools/export_blocklist.txt
-agent-logs/
-
+.agents/
+.aws/
+.codex/

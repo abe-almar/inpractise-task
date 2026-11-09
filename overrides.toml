@@ -1,6 +1,6 @@
 # Facts about the companies that EDGAR's ticker file and submissions JSON do not carry, each with its evidence.
 # The job reads this file on every run. Add an entry here when the morning check reports a ticker whose CIK
-# changed, or a company whose fiscal year end is null. See docs/decisions.md (D2, D3).
+# changed, or a company whose fiscal year end is null. See the data decisions in AGENTS.md.
 
 # Predecessor or sibling registrants whose filings belong to the company's history.
 [[extra_ciks]]
@@ -41,7 +41,7 @@ key = "0000732717-21-000080"
 note = "AT&T 10-Q filed 2021-11-04: cover page says 'For the quarterly period ended September 30, 2021' (read 2026-11-07), third quarter; the SEC's XBRL label says Q2."
 
 # Issuers that name their fiscal year by the calendar year in which it STARTS. Our label is the year in which it
-# ends (decision D3); the SEC's XBRL label follows the issuer. Only the companies listed here, in this direction
+# ends; the SEC's XBRL label follows the issuer. Only the companies listed here, in this direction
 # and up to the given filing date, count as a naming convention; any other disagreement is a real one.
 [[naming_conventions]]
 ticker = "GME"

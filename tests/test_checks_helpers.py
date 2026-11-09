@@ -1,4 +1,4 @@
-"""The pure helpers of the morning check (docs/decisions.md D9): filer categories, business days, accepted findings
+"""The pure helpers of the morning check: filer categories, business days, accepted findings
 and the printed report. The database-backed checks are exercised end to end in test_replay_db.py."""
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ def test_filer_category(category, entity_type, files_10q, expected):
 @pytest.mark.parametrize("annual_form", ["20-F", "20-F/A", " 20-F "])
 def test_the_annual_form_decides_the_foreign_private_issuer(annual_form):
     # Toyota and Alibaba in tests/fixtures: EDGAR calls them 'Large accelerated filer', yet the 20-F is due in four
-    # months whatever the category says (D11, revised)
+    # months whatever the category says
     assert filer_category("Large accelerated filer", "other", False, annual_form) == "foreign_private_issuer"
     assert filer_category("Accelerated filer", "operating", True, annual_form) == "foreign_private_issuer"
 

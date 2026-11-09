@@ -23,8 +23,8 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-# Source pages are not committed (they are 100 KB to 1 MB each); download them with docs/evidence/tools/edgar_probe.py
-# into a directory and pass that directory as SOURCE_DIR.
+# Source pages are not committed (they are 100 KB to 1 MB each). Save the files listed in SOURCES from
+# https://data.sec.gov/submissions/<filename> into SOURCE_DIR, using a declared User-Agent and paced requests.
 DEFAULT_SOURCE_DIR = None
 
 TRACKED_FORMS = (

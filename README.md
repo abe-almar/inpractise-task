@@ -3,6 +3,9 @@
 A small daily job that keeps a Postgres table of every annual and quarterly report twenty companies have filed with
 the SEC, each labelled with the fiscal year and period it covers. Source: EDGAR's free submissions API, no key.
 
+The deliverables are the job below, the [morning check](docs/morning-check.md), the [handover kit](AGENTS.md),
+[what could still go wrong](docs/what-i-didnt-trust.md), and the [analyst's answer](docs/analyst-question.md).
+
 ## Run it
 
 You need `make`, Python 3.12+ and Docker (no Docker if you bring your own Postgres, see below). `make` uses
@@ -17,8 +20,9 @@ That is the one command, from a fresh clone and every morning after. It starts t
 every CIK, validates each page, upserts the filings, labels them, refreshes the SEC's own labels for filers with news,
 runs the morning checks, prints a report and exits 0 only when the run and every hard check passed. The first run reads
 every filer's whole history (about 140 requests, about a minute), as does the first run after adding a company, for that
-company; other runs read one page per CIK (about 22 requests, a few seconds). Running it twice in a morning changes
-nothing. Every command's output starts by naming the database it uses (`database: localhost:25432/sec_filings`; the JSON
+company; ordinary runs read one page per CIK (about 22 requests, a few seconds); when a tracked filing leaves the recent
+page, the job checks the relevant history pages before calling it missing. Repeating the run with unchanged SEC data
+adds no filings. Every command's output starts by naming the database it uses (`database: localhost:25432/sec_filings`; the JSON
 commands `report` and `summary` say it on stderr), so a green run can never be mistaken for a run against another
 database.
 
@@ -75,12 +79,14 @@ is `2026 FY`. Some issuers name years by their start (GameStop's year ended 2025
 they are listed in `overrides.toml` with evidence, and the SEC's own label is stored next to ours in
 `sec_fiscal_year` / `sec_fiscal_period` for the filings that have XBRL (2009 onwards). When EDGAR's "period of
 report" is wrong for a filing, `overrides.toml` carries the corrected date with the evidence read, and the label
-follows it (`label_method = 'corrected'`). Decision D3 in `docs/decisions.md` explains the choice and the alternatives.
+follows it (`label_method = 'corrected'`). The [handover kit](AGENTS.md) explains how to extend these rules and
+record corrections.
 
 ## Scheduling
 
 The job is a plain function, `sec_filings.flow.daily_run(settings, mode)`, which returns a `RunResult` with the
-counts and the check results. Nothing imports Prefect. To run it under Prefect, this is the whole wrapper:
+counts and the check results. Nothing imports Prefect. Set `DATABASE_URL` in the scheduler environment; `.env` loading
+is provided by the command line. To run the function under Prefect, this is the whole wrapper:
 
 ```python
 from prefect import flow
@@ -93,6 +99,9 @@ def sec_filings_daily() -> None:
     if not result.ok:
         raise RuntimeError(f"run {result.run_id}: attention needed (see the checks table)")
 ```
+
+Overlapping runs serialize through a database lock held until the connection closes, so a retry waits for the
+previous run before fetching or writing.
 
 Or schedule the command itself and alert on a non-zero exit code: `cd /path/to/repo && make run` (with `docker` on the
 scheduler's `PATH` if it uses the compose database). The morning check that tells a wrong run from a crashed one is
@@ -133,11 +142,3 @@ make test-db    # the replay tests (idempotence, outage recovery), each in its o
 | `flow.py` | `daily_run`: the steps in order, the function a scheduler calls |
 | `verify.py` | the SEC's own XBRL labels, loaded for the cross-check |
 | `report.py`, `cli.py` | answers for humans and the `sec-filings` command, which the `Makefile` targets wrap |
-
-## Where to read next
-
-- `AGENTS.md`: the handover kit for a person or an agent who has to run, extend or fix this (adding companies,
-  what to check before saying "done").
-- `docs/decisions.md`: every decision with its alternatives and the check behind it.
-- `docs/morning-check.md`, `docs/what-i-didnt-trust.md`, `docs/analyst-question.md`: the written answers.
-- `docs/evidence/`: the data that backs them, including the run logs and review reports.

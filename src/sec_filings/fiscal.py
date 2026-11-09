@@ -1,6 +1,6 @@
 """Which fiscal year and period a report covers.
 
-Convention (decision D3 in docs/decisions.md): the fiscal year is the calendar year of the NOMINAL fiscal year end
+Convention (see "Fiscal labels" in README.md): the fiscal year is the calendar year of the NOMINAL fiscal year end
 nearest the period end. Apple's year ended 2009-09-26 is fiscal 2009; Walmart's year ended 2026-01-31 is fiscal
 2026; a 52/53-week year ending 2027-01-02 against a nominal 31 December is fiscal 2026, as the company itself names
 it. Quarters are counted from the previous nominal year end: Apple's quarter ended 2025-12-27 is fiscal 2026 Q1. The

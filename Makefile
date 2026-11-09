@@ -62,7 +62,7 @@ lock: setup  ## Resolve the newest versions pyproject.toml allows and pin them i
 	   echo "# No hashes: pip's hash mode refuses the editable install of the job itself (-e .)."; \
 	   .venv/bin/pip freeze --exclude-editable; } > constraints.txt
 	@touch $(CLI)
-	@echo "constraints.txt refreshed from .venv; now run the completion checks (AGENTS.md, section 7)"
+	@echo "constraints.txt refreshed from .venv; now run the completion checks in AGENTS.md"
 
 db:  ## Start the database in docker-compose.yml (run does it when there is no DATABASE_URL and no .env)
 	@docker compose up -d --wait --quiet-pull
