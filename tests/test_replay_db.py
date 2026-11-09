@@ -1338,3 +1338,97 @@ def test_overdue_reports_nt_grace_and_week_calendars(schema):
     assert overdue == {"CAL": 9, "LAT": 9, "WRK": 9, "WKS": (date(2027, 3, 10) - date(2026, 11, 25)).days, "WKQ": 34}
     assert result.passed is False and result.severity == "soft"
     assert checks.check_overdue_reports(conn, date(2027, 2, 1)).detail["items"] == [{**expected["WKS"], "days_overdue": (date(2027, 2, 1) - date(2026, 11, 25)).days}]
+
+
+# ----------------------------------------------------------------------------- reports moving from recent to archives
+
+@pytest.mark.parametrize("report_still_listed", [True, False])
+def test_recent_rollover_checks_only_relevant_archive_before_marking_missing(schema, report_still_listed):
+    _, conn = schema
+    cik = 1
+    old = {"accession": "0000000001-25-000010", "form": "10-K", "filed": date(2025, 2, 20),
+           "period": date(2024, 12, 31), "xbrl": 0}
+    recent = {"accession": "0000000001-25-000020", "form": "10-Q", "filed": date(2025, 5, 5),
+              "period": date(2025, 3, 31), "xbrl": 0}
+    page = synthetic_page(cik, "Rollover Corp", "ROLL", "1231", [recent, old])
+    client = FakeEdgarClient({cik: page})
+    older_name = add_history(client, cik)
+
+    def ingest(day):
+        run_id = conn.execute("INSERT INTO runs (mode) VALUES ('daily') RETURNING id").fetchone()["id"]
+        return loader.ingest_filer(conn, client, run_id, cik, backfill=False, overrides_fye=None, today=day)
+
+    first = ingest(TODAY)
+    assert first.history_fetched and first.pages == 2
+    completed = conn.execute("SELECT backfill_completed_at FROM filers WHERE cik = %s", (cik,)).fetchone()["backfill_completed_at"]
+    older_descriptor = copy.deepcopy(page["filings"]["files"][0])
+    _remove_accession(page, old["accession"])
+    archive_name = "CIK0000000001-submissions-002.json"
+    anchor = {"accession": "0000000001-25-000009", "form": "8-K", "filed": date(2025, 2, 19),
+              "period": date(2025, 2, 19), "xbrl": 0}
+    archived_rows = [anchor, old] if report_still_listed else [anchor]
+    client.older_pages[archive_name] = synthetic_page(cik, "archive", "ROLL", "1231", archived_rows)["filings"]["recent"]
+    # filingTo is deliberately a day too early, as observed on real SEC history descriptors.
+    page["filings"]["files"] = [older_descriptor, {"name": archive_name, "filingCount": len(archived_rows),
+                                                  "filingFrom": "2025-02-19", "filingTo": "2025-02-19"}]
+    gap = date(2026, 10, 1)
+    conn.execute("UPDATE filers SET coverage_gap_since = %s WHERE cik = %s", (gap, cik))
+
+    second = ingest(TODAY + timedelta(days=1))
+    assert second.pages == 2 and not second.history_fetched and second.inserted == 0
+    assert _history_urls(client) == [older_name, archive_name]
+    expected_missing = [] if report_still_listed else [old["accession"]]
+    assert second.newly_missing == expected_missing
+    assert conn.execute("SELECT not_seen_since FROM filings WHERE accession_number = %s", (old["accession"],)).fetchone()["not_seen_since"] == (
+        None if report_still_listed else TODAY + timedelta(days=1)
+    )
+    assert conn.execute("SELECT backfill_completed_at, coverage_gap_since FROM filers WHERE cik = %s", (cik,)).fetchone() == {
+        "backfill_completed_at": completed, "coverage_gap_since": gap,
+    }
+
+    if report_still_listed:
+        # Once reconciled, an unchanged daily run needs only the recent page again.
+        third = ingest(TODAY + timedelta(days=2))
+        assert third.pages == 1 and third.newly_missing == []
+        assert _history_urls(client) == [older_name, archive_name]
+    else:
+        # A previously flagged filing may reappear in an archive after the recent boundary has advanced.
+        client.older_pages[archive_name] = synthetic_page(cik, "archive", "ROLL", "1231", [anchor, old])["filings"]["recent"]
+        page["filings"]["files"][1]["filingCount"] = 2
+        third = ingest(TODAY + timedelta(days=2))
+        assert third.pages == 2 and not third.history_fetched and third.newly_missing == []
+        assert conn.execute("SELECT not_seen_since FROM filings WHERE accession_number = %s", (old["accession"],)).fetchone()["not_seen_since"] is None
+
+
+@pytest.mark.parametrize("same_start", [False, True])
+def test_rollover_reads_both_archives_when_a_filing_day_crosses_the_partition_boundary(schema, same_start):
+    _, conn = schema
+    cik = 1
+    old = {"accession": "0000000001-25-000010", "form": "10-K", "filed": date(2025, 2, 20),
+           "period": date(2024, 12, 31), "xbrl": 0}
+    recent = {"accession": "0000000001-25-000020", "form": "10-Q", "filed": date(2025, 5, 5),
+              "period": date(2025, 3, 31), "xbrl": 0}
+    page = synthetic_page(cik, "Rollover Corp", "ROLL", "1231", [recent, old])
+    client = FakeEdgarClient({cik: page})
+    run_id = conn.execute("INSERT INTO runs (mode) VALUES ('daily') RETURNING id").fetchone()["id"]
+    loader.ingest_filer(conn, client, run_id, cik, backfill=False, overrides_fye=None, today=TODAY)
+    _remove_accession(page, old["accession"])
+    older_name = add_history(client, cik)  # also eligible if its next boundary is the candidate day
+    older_descriptor = copy.deepcopy(page["filings"]["files"][0])
+    first_name, second_name = "CIK0000000001-submissions-002.json", "CIK0000000001-submissions-003.json"
+    anchor_date = old["filed"] if same_start else date(2024, 11, 5)
+    anchor = {"accession": "0000000001-24-000009", "form": "8-K", "filed": anchor_date,
+              "period": anchor_date, "xbrl": 0}
+    same_day = {**anchor, "accession": "0000000001-25-000011", "filed": old["filed"], "period": old["filed"]}
+    client.older_pages[first_name] = synthetic_page(cik, "archive", "ROLL", "1231", [anchor, old])["filings"]["recent"]
+    client.older_pages[second_name] = synthetic_page(cik, "archive", "ROLL", "1231", [same_day])["filings"]["recent"]
+    page["filings"]["files"] = [
+        {"name": second_name, "filingCount": 1, "filingFrom": str(old["filed"]), "filingTo": str(old["filed"])},
+        older_descriptor,
+        {"name": first_name, "filingCount": 2, "filingFrom": str(anchor_date), "filingTo": str(anchor_date)},
+    ]
+    second_run = conn.execute("INSERT INTO runs (mode) VALUES ('daily') RETURNING id").fetchone()["id"]
+    result = loader.ingest_filer(conn, client, second_run, cik, backfill=False, overrides_fye=None, today=TODAY + timedelta(days=1))
+    assert result.pages == (4 if same_start else 3) and not result.history_fetched and result.newly_missing == []
+    assert _history_urls(client) == ([second_name, older_name, first_name] if same_start else [second_name, first_name])
+    assert conn.execute("SELECT not_seen_since FROM filings WHERE accession_number = %s", (old["accession"],)).fetchone()["not_seen_since"] is None

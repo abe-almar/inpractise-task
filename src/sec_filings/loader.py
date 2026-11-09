@@ -291,19 +291,24 @@ def ingest_filer(
         window_start = previous_start
 
     # A filer's history is read the first time it is seen, on any run, so a first run or a new company can never end
-    # green with only the recent page loaded. After that only `backfill` reads it: for a gap on record, or everyone on --full.
+    # green with only the recent page loaded. After that `backfill` re-reads the whole history for a gap on record
+    # or everyone on --full; daily runs check individual archives when a report may have rolled out of recent.
     read_history = not filer.get("backfill_completed_at") or (backfill and (full or filer.get("coverage_gap_since")))
+    advertised = data.get("filings", {}).get("files", []) or []
+    listed = {r["accession_number"] for r in rows} | (seen_this_run or set())
+    history_pages = advertised if read_history else _rollover_history_pages(
+        conn, cik, advertised, window_start, recent_window_start, listed,
+    )
     pages = 1
-    if read_history:
-        for page in data.get("filings", {}).get("files", []) or []:
-            page_data, page_raw = client.submissions_page(page["name"])
-            validate_history_page(cik, page, page_data)
-            _store_snapshot(conn, cik, page["name"], run_id, page_raw, page_data)
-            rows.extend(parse_page(cik, page_data))
-            page_from = _as_date(page.get("filingFrom"))
-            if page_from and (window_start is None or page_from < window_start):
-                window_start = page_from   # a history page extends the window back to its oldest filing
-            pages += 1
+    for page in history_pages:
+        page_data, page_raw = client.submissions_page(page["name"])
+        validate_history_page(cik, page, page_data)
+        _store_snapshot(conn, cik, page["name"], run_id, page_raw, page_data)
+        rows.extend(parse_page(cik, page_data))
+        page_from = _as_date(page.get("filingFrom"))
+        if read_history and page_from and (window_start is None or page_from < window_start):
+            window_start = page_from   # only a full history read extends the disappearance window
+        pages += 1
 
     inserted, updated = upsert_filings(conn, rows, run_id)
     listed = {r["accession_number"] for r in rows}
@@ -315,6 +320,43 @@ def ingest_filer(
     conn.commit()
     return IngestResult(cik, data.get("name") or "", pages, len(rows), inserted, updated, newly_missing, snapshot_changed,
                         recent_window_start, bool(read_history))
+
+
+def _rollover_history_pages(
+    conn: psycopg.Connection, cik: int, advertised: list[dict], window_start: date | None,
+    recent_window_start: date | None, seen: set[str],
+) -> list[dict]:
+    """Reconcile reports that left the recent window before declaring them gone. A normal page rollover moves them
+    to an archive. Previously flagged reports are included so a later archive listing repairs the finding too.
+
+    Only partitions that can contain a candidate's filing date are read. The SEC's advertised filingTo often
+    disagrees with the actual last date, so boundaries come from filingFrom and the next newer partition's start.
+    Inclusive boundaries read both pages when one day's filings are split across partitions. A missing start is
+    treated conservatively as a possible match. These reads neither complete a backfill nor clear a coverage gap.
+    """
+    if not advertised or window_start is None or recent_window_start is None:
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT DISTINCT filing_date FROM filings
+            WHERE (cik = %s OR %s = ANY(also_filed_by_ciks)) AND filing_date <= %s
+              AND (filing_date >= %s OR not_seen_since IS NOT NULL)
+              AND NOT (accession_number = ANY(%s))
+            """,
+            (cik, cik, recent_window_start, window_start, list(seen)),
+        )
+        dates = {row["filing_date"] for row in cur.fetchall()}
+    if not dates:
+        return []
+    page_starts = [(page, _as_date(page.get("filingFrom"))) for page in advertised]
+    starts = sorted({start for _, start in page_starts if start is not None})
+    selected = []
+    for page, start in page_starts:
+        next_start = next((d for d in starts if start is not None and d > start), None)
+        if start is None or any(start <= d and (next_start is None or d <= next_start) for d in dates):
+            selected.append(page)
+    return selected
 
 
 def _upsert_filer(conn: psycopg.Connection, cik: int, data: dict, overrides_fye: str | None, run_id: int) -> dict:

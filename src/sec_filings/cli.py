@@ -101,7 +101,7 @@ def _run_command(argv: list[str] | None) -> int:
 
 def _name_database(settings: Settings, stream=None) -> None:
     """The first line of every command: which database it uses, so a green run can never pass for one against another."""
-    print(f"database: {db.describe(settings.database_url)}", file=stream or sys.stdout)
+    print(f"database: {db.describe(settings.database_url)}", file=stream or sys.stdout, flush=True)
 
 
 def _inputs_line(run: dict, settings: Settings) -> str:

@@ -46,7 +46,7 @@ test: setup  ## Offline unit tests
 	@.venv/bin/pytest -q
 
 test-db: setup $(START_DB)  ## The replay tests against Postgres (each in its own throwaway schema)
-	@TEST_DATABASE_URL="$${DATABASE_URL:?this target needs DATABASE_URL in the environment, .env is not enough}" .venv/bin/pytest -q tests/test_replay_db.py
+	@TEST_DATABASE_URL="$${DATABASE_URL:?this target needs DATABASE_URL in the environment, .env is not enough}" .venv/bin/pytest -q tests/test_replay_db.py tests/test_run_safety_db.py
 
 setup: $(CLI)  ## Create the virtualenv and install; does nothing when already done
 

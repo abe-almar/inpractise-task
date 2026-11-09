@@ -30,6 +30,7 @@ DEADLINES: dict[str, dict[str, tuple[str, int] | None]] = {
     "accelerated": {"annual": ("days", 75), "quarterly": ("days", 40)},
     "non_accelerated": {"annual": ("days", 90), "quarterly": ("days", 45)},
     "foreign_private_issuer": {"annual": ("months", 4), "quarterly": None},
+    "canadian_mjds": {"annual": None, "quarterly": None},  # Form 40-F follows the Canadian authority's deadline
 }
 NT_GRACE = {"annual": 15, "quarterly": 5}
 PERIOD_MATCH_DAYS = 10          # a notice's period and a nominal period end are the same period within this
@@ -122,9 +123,12 @@ def _finding(name: str, severity: str, items: list, ok: str, fail: str, **extra)
 
 
 def filer_category(category: str | None, entity_type: str | None, files_10q: bool, annual_form: str | None = None) -> str:
-    """Deadline class. A company whose annual report is a 20-F or 40-F is a foreign private issuer whatever its
-    accelerated status says: the 20-F deadline is four months regardless."""
-    if (annual_form or "").strip().removesuffix("/A") in ("20-F", "40-F"):
+    """Deadline class. The annual form takes precedence over accelerated status: 20-F has four months;
+    40-F follows its Canadian filing deadline, which the submissions metadata does not provide."""
+    form = (annual_form or "").strip().removesuffix("/A")
+    if form == "40-F":
+        return "canadian_mjds"
+    if form == "20-F":
         return "foreign_private_issuer"
     text = (category or "").lower()
     if "large accelerated" in text:
@@ -367,23 +371,36 @@ def check_overdue_reports(conn: psycopg.Connection, today: date) -> CheckResult:
     """For each company: the next report the calendar expects, its statutory deadline, and whether it is overdue."""
     rows = _rows(conn, """
         SELECT c.ticker, fl.cik, fl.category, fl.entity_type, coalesce(fl.fiscal_year_end_override, fl.fiscal_year_end) AS fye,
-               (SELECT max(report_date) FROM filings x WHERE x.cik = fl.cik AND x.family IN ('annual','quarterly') AND NOT x.is_amendment) AS last_report,
-               (SELECT count(*) > 0 FROM filings x WHERE x.cik = fl.cik AND x.family = 'quarterly') AS files_10q,
-               (SELECT x.form FROM filings x WHERE x.cik = fl.cik AND x.family = 'annual' AND NOT x.is_amendment
-                  ORDER BY x.report_date DESC NULLS LAST LIMIT 1) AS annual_form
+               (SELECT max(coalesce(x.report_date_corrected, x.report_date)) FROM filings x
+                  WHERE (x.cik = fl.cik OR fl.cik = ANY(x.also_filed_by_ciks))
+                    AND x.family IN ('annual','quarterly') AND NOT x.is_amendment) AS last_report,
+               (SELECT count(*) > 0 FROM filings x
+                  WHERE (x.cik = fl.cik OR fl.cik = ANY(x.also_filed_by_ciks)) AND x.family = 'quarterly') AS files_10q,
+               (SELECT x.form FROM filings x
+                  WHERE (x.cik = fl.cik OR fl.cik = ANY(x.also_filed_by_ciks)) AND x.family = 'annual' AND NOT x.is_amendment
+                  ORDER BY coalesce(x.report_date_corrected, x.report_date) DESC NULLS LAST LIMIT 1) AS annual_form
         FROM companies c JOIN company_ciks cc ON cc.ticker = c.ticker AND cc.is_current
         JOIN filers fl ON fl.cik = cc.cik WHERE c.active ORDER BY c.ticker""")
-    notices = _rows(conn, "SELECT cik, form, report_date, filing_date FROM filings WHERE family = 'late_notice'")
+    notices = _rows(conn, """SELECT cik, also_filed_by_ciks, form, coalesce(report_date_corrected, report_date) AS report_date,
+                                  filing_date FROM filings WHERE family = 'late_notice'""")
     items, expected = [], []
+    unknown_deadlines = 0
     for r in rows:
         if not r["last_report"] or not fiscal.valid_mmdd(r["fye"]):
             continue
         cat = filer_category(r["category"], r["entity_type"], r["files_10q"], r["annual_form"])
-        next_end, kind = _next_expected_period(r["last_report"], r["fye"], annual_only=(cat == "foreign_private_issuer" or not r["files_10q"]))
+        next_end, kind = _next_expected_period(r["last_report"], r["fye"],
+                                               annual_only=(cat in ("foreign_private_issuer", "canadian_mjds") or not r["files_10q"]))
         deadline = statutory_deadline(next_end, cat, kind)
         if deadline is None:
+            entry = {"key": f"{r['ticker']}/{kind}/{next_end}", "ticker": r["ticker"], "expected": kind,
+                     "period_end": str(next_end), "deadline": None, "filer_category": cat,
+                     "last_report": str(r["last_report"]), "reason": "Form 40-F deadline needs Canadian filing calendar"}
+            expected.append(entry)
+            items.append(entry)
+            unknown_deadlines += 1
             continue
-        notice = next((n for n in notices if n["cik"] == r["cik"] and n["report_date"]
+        notice = next((n for n in notices if (n["cik"] == r["cik"] or r["cik"] in n["also_filed_by_ciks"]) and n["report_date"]
                        and abs((n["report_date"] - next_end).days) <= PERIOD_MATCH_DAYS
                        and (("10-K" in n["form"] or "20-F" in n["form"]) == (kind == "annual"))), None)
         timely_notice = bool(notice and notice["filing_date"] <= next_business_day(deadline + timedelta(days=1)))
@@ -395,8 +412,10 @@ def check_overdue_reports(conn: psycopg.Connection, today: date) -> CheckResult:
         expected.append(entry)
         if today > deadline:
             items.append({**entry, "days_overdue": (today - deadline).days})
-    return _finding("overdue_reports", "soft", items, "no company is past its filing deadline",
-                    f"{len(items)} company report(s) past the statutory deadline (or EDGAR has not shown them yet)", expected_next=expected)
+    summary = f"{len(items) - unknown_deadlines} company report(s) past the statutory deadline (or EDGAR has not shown them yet)"
+    if unknown_deadlines:
+        summary += f"; {unknown_deadlines} Form 40-F deadline(s) need the Canadian filing calendar"
+    return _finding("overdue_reports", "soft", items, "no company is past its filing deadline", summary, expected_next=expected)
 
 
 def _next_expected_period(last_report: date, fye: str, annual_only: bool) -> tuple[date, str]:

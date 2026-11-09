@@ -26,17 +26,17 @@ def summary(conn: psycopg.Connection) -> list[dict]:
             SELECT c.ticker,
                    string_agg(DISTINCT cc.cik::text, ',' ORDER BY cc.cik::text) AS ciks,
                    max(fl.name) FILTER (WHERE cc.is_current) AS name,
-                   count(*) FILTER (WHERE f.family = 'annual' AND NOT f.is_amendment) AS annual,
-                   count(*) FILTER (WHERE f.family = 'quarterly' AND NOT f.is_amendment) AS quarterly,
-                   count(*) FILTER (WHERE f.is_amendment) AS amendments,
-                   count(*) FILTER (WHERE f.family = 'late_notice') AS late_notices,
-                   min(f.report_date) FILTER (WHERE f.family = 'annual') AS first_annual,
-                   max(f.report_date) FILTER (WHERE f.family IN ('annual','quarterly')) AS last_period,
-                   count(*) FILTER (WHERE f.family IN ('annual','quarterly') AND f.label_method <> 'rule') AS odd_labels
+                   count(DISTINCT f.accession_number) FILTER (WHERE f.family = 'annual' AND NOT f.is_amendment) AS annual,
+                   count(DISTINCT f.accession_number) FILTER (WHERE f.family = 'quarterly' AND NOT f.is_amendment) AS quarterly,
+                   count(DISTINCT f.accession_number) FILTER (WHERE f.is_amendment) AS amendments,
+                   count(DISTINCT f.accession_number) FILTER (WHERE f.family = 'late_notice') AS late_notices,
+                   min(coalesce(f.report_date_corrected, f.report_date)) FILTER (WHERE f.family = 'annual') AS first_annual,
+                   max(coalesce(f.report_date_corrected, f.report_date)) FILTER (WHERE f.family IN ('annual','quarterly')) AS last_period,
+                   count(DISTINCT f.accession_number) FILTER (WHERE f.family IN ('annual','quarterly') AND f.label_method <> 'rule') AS odd_labels
             FROM companies c
             JOIN company_ciks cc ON cc.ticker = c.ticker
             LEFT JOIN filers fl ON fl.cik = cc.cik
-            LEFT JOIN filings f ON f.cik = cc.cik
+            LEFT JOIN filings f ON f.cik = cc.cik OR cc.cik = ANY(f.also_filed_by_ciks)
             WHERE c.active GROUP BY c.ticker ORDER BY c.ticker
             """
         )

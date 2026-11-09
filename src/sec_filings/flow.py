@@ -20,6 +20,7 @@ from sec_filings.edgar import EdgarClient, EdgarError
 from sec_filings.settings import Settings
 
 log = logging.getLogger(__name__)
+RUN_LOCK = 727402  # session lock: overlapping scheduled runs must not compare stale pages with newer writes
 
 
 @dataclass
@@ -60,8 +61,8 @@ class _Loaded:
 def daily_run(settings: Settings, mode: str = "daily", client: EdgarClient | None = None, today: date | None = None,
               full: bool = False) -> RunResult:
     """Fetch, load, label and check. A filer's history pages are read the first time it is seen, in either mode. After
-    that `mode` 'daily' reads recent pages only and 'backfill' also re-reads history: for a filer with a coverage gap, for
-    everyone with `full=True`."""
+    that `mode` 'daily' normally reads recent pages, checking relevant archives when a report leaves the recent
+    window. 'backfill' re-reads full history for a filer with a coverage gap, or everyone with `full=True`."""
     if mode not in ("daily", "backfill"):
         raise ValueError("mode must be 'daily' or 'backfill'")
     today = today or datetime.now(timezone.utc).date()
@@ -73,35 +74,34 @@ def daily_run(settings: Settings, mode: str = "daily", client: EdgarClient | Non
 
     conn = db.connect(settings.database_url)
     try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT pg_advisory_lock(%s)", (RUN_LOCK,))
         db.migrate(conn)
         with conn.cursor() as cur:
             cur.execute("INSERT INTO runs (mode) VALUES (%s) RETURNING id", (mode,))
             run_id = cur.fetchone()["id"]
         conn.commit()
         result = RunResult(run_id=run_id, mode=mode, status="running", inputs=inputs)
-        loaded = None
         try:
             loaded = _load_everything(conn, client, run_id, tickers, overrides, mode == "backfill", full, today, result)
-            result.status = "ok"
-        except Exception as exc:  # noqa: BLE001 - recorded on the run row, reported by the CLI
-            result.status = "failed"
-            result.error = f"{type(exc).__name__}: {exc}"
-            log.exception("run %s failed", run_id)
-            conn.rollback()
-        if loaded is not None and result.status == "ok":
             _refresh_sec_labels(conn, client, overrides, loaded)
-        result.requests, result.http_errors = client.stats.requests, client.stats.http_errors
-        result.duration_sec = time.monotonic() - started
-        if loaded is not None and result.status == "ok":
             facts = checks_mod.RunFacts(
                 run_id=run_id, ciks_expected=result.ciks_expected, ciks_fetched=result.ciks_fetched,
-                http_errors=client.stats.http_errors, retries=client.stats.retries, duration_sec=result.duration_sec,
+                http_errors=client.stats.http_errors, retries=client.stats.retries, duration_sec=time.monotonic() - started,
                 time_budget_sec=settings.run_time_budget_sec, missing_tickers=loaded.resolution.missing,
                 resolved_by_override=loaded.resolution.resolved_by_override, changed_tickers=loaded.resolution.changed,
                 newly_missing=loaded.newly_missing, fetch_errors=result.fetch_errors,
                 sec_labels_refreshed=loaded.sec_labels_refreshed, sec_label_refresh_errors=loaded.sec_label_refresh_errors,
             )
             result.checks = checks_mod.run_checks(conn, facts, overrides, today)
+            result.status = "ok"
+        except Exception as exc:  # noqa: BLE001 - every stage's error is recorded, including refresh and checks
+            result.status = "failed"
+            result.error = f"{type(exc).__name__}: {exc}"
+            log.exception("run %s failed", run_id)
+            conn.rollback()
+        result.requests, result.http_errors = client.stats.requests, client.stats.http_errors
+        result.duration_sec = time.monotonic() - started
         _close_run(conn, result)
         return result
     finally:
@@ -110,7 +110,7 @@ def daily_run(settings: Settings, mode: str = "daily", client: EdgarClient | Non
 
 def _load_everything(conn: psycopg.Connection, client: EdgarClient, run_id: int, tickers: list[str], overrides: loader.Overrides,
                      backfill: bool, full: bool, today: date, result: RunResult) -> _Loaded:
-    """Companies -> CIKs -> one fetch per CIK -> overrides -> labels. A filer whose page fails is recorded in
+    """Companies -> CIKs -> each filer's pages -> overrides -> labels. A filer whose page fails is recorded in
     result.fetch_errors and skipped; the run goes on and `run_complete` fails."""
     loader.sync_companies(conn, tickers, overrides)
     loaded = _Loaded(resolution=loader.resolve_ciks(conn, client, run_id, tickers))

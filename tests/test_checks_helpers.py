@@ -40,12 +40,18 @@ def test_filer_category(category, entity_type, files_10q, expected):
     assert filer_category(category, entity_type, files_10q) == expected
 
 
-@pytest.mark.parametrize("annual_form", ["20-F", "20-F/A", "40-F", " 20-F "])
+@pytest.mark.parametrize("annual_form", ["20-F", "20-F/A", " 20-F "])
 def test_the_annual_form_decides_the_foreign_private_issuer(annual_form):
     # Toyota and Alibaba in tests/fixtures: EDGAR calls them 'Large accelerated filer', yet the 20-F is due in four
     # months whatever the category says (D11, revised)
     assert filer_category("Large accelerated filer", "other", False, annual_form) == "foreign_private_issuer"
     assert filer_category("Accelerated filer", "operating", True, annual_form) == "foreign_private_issuer"
+
+
+@pytest.mark.parametrize("annual_form", ["40-F", "40-F/A"])
+def test_40f_requires_the_canadian_deadline(annual_form):
+    assert filer_category("Large accelerated filer", "other", False, annual_form) == "canadian_mjds"
+    assert statutory_deadline(date(2026, 12, 31), "canadian_mjds", "annual") is None
 
 
 def test_without_the_annual_form_the_category_text_wins():
