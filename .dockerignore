@@ -1,0 +1,11 @@
+# The image is the job and nothing else.
+.git
+.venv
+.env
+.pytest_cache
+__pycache__
+*.egg-info
+docs/
+tests/
+brief.md
+agent-logs/

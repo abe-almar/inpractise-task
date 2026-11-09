@@ -157,3 +157,18 @@ def test_every_dependency_is_pinned_in_constraints():
             pinned[name.lower().replace("_", "-")] = version
     assert declared <= set(pinned), declared - set(pinned)
     assert '-c constraints.txt -e ".[dev]"' in (ROOT / "Makefile").read_text(encoding="utf-8")
+
+
+def test_the_container_runs_the_same_job_against_the_compose_database():
+    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    job = compose[compose.index("\n  job:"):compose.index("\nvolumes:")]
+    job = "\n".join(line for line in job.splitlines() if not line.strip().startswith("#"))
+    assert 'profiles: ["job"]' in job                                       # `make db` (compose up) never starts it
+    assert "DATABASE_URL: postgresql://sec:sec@db:5432/sec_filings" in job
+    assert "${DATABASE_URL" not in job                                      # a .env written for the host must not leak in
+    for key, value in (("POSTGRES_USER", "sec"), ("POSTGRES_PASSWORD", "sec"), ("POSTGRES_DB", "sec_filings")):
+        assert f"{key}: {value}" in compose
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert re.search(r"^FROM python:3\.12-slim$", dockerfile, re.M)
+    assert "-c constraints.txt" in dockerfile and 'ENTRYPOINT ["sec-filings"]' in dockerfile
+    assert ".env" in (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()

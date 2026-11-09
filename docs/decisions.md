@@ -220,7 +220,8 @@ that day. Evidence lives in `docs/evidence/`, review reports in `docs/review-evi
 ```
 README.md            one command, the example query, how a scheduler calls it, where each module lives
 AGENTS.md            the handover kit for any agent (decisions, checks, how to add a company, how to say "done")
-Makefile, brief.md, companies.csv, overrides.toml, pyproject.toml, docker-compose.yml, .env.example
+Makefile, brief.md, companies.csv, overrides.toml, pyproject.toml, constraints.txt, docker-compose.yml, .env.example
+Dockerfile, .dockerignore   the job as an image (D17)
 src/sec_filings/     settings, edgar (client), fiscal (rule), db (schema), loader (EDGAR -> table), checks, flow, verify, report, cli
 src/sec_filings/sql/ 001_schema.sql
 tests/               unit, replay and cross-check tests with trimmed real fixtures
@@ -253,3 +254,19 @@ docs/evidence/       probes, run logs, cover-page checks, tools; docs/review-evi
   the files' content keyed by hash, as `source_snapshots` does for EDGAR pages (a table and a migration, and both
   files live in git, where the hash finds the exact version).
 - Check: `tests/test_replay_db.py` (the notes of run 1); `tests/test_cli.py` (ok, warning and pre-entry run).
+
+## D17. A container image for schedulers that run images (2026-11-09)
+
+- `Dockerfile` builds the job on `python:3.12-slim` with the pinned dependencies, the inputs baked as defaults and a
+  non-root user; `docker-compose.yml` has a one-shot `job` service behind a profile, with the in-network database
+  address fixed in the file and the working copies of `companies.csv` and `overrides.toml` mounted read-only over
+  the baked ones. `make docker-run [CMD=...]` builds and runs it; the container's exit code is the job's, so the
+  contract with the scheduler (D8) holds. `make run` on the host remains the one command.
+- Rejected: inputs baked only (adding a company would need a rebuild, against D8's "a line in companies.csv");
+  `${DATABASE_URL}` in the compose file (compose reads a `.env` written for the host, localhost:25432, which no
+  container can reach; D8's one-reader rule); a `job` service without a profile (`make db` runs `docker compose up`,
+  which would build and run the job on every `make run`); Docker as the one command (it would need Docker on the
+  scheduler, and the brief asks for a Python job).
+- Check: `tests/test_cli.py` (the service's address matches the database service, the profile is set, no
+  `${DATABASE_URL}`, the image installs the pins); `docs/evidence/docker-run-2026-11-09.log` (the image built,
+  `check` and a full run inside the container, `new=0` on the host afterwards).

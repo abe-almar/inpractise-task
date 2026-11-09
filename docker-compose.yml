@@ -1,5 +1,6 @@
 # Local Postgres for the job. Any Postgres 14+ works; this is only the quickest way to get one.
 #   make db   (or simply make run, which starts it)
+# And the job itself as a container, for schedulers that run images: the `job` service below (make docker-run).
 services:
   db:
     image: postgres:17
@@ -16,5 +17,31 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
+  # The job as a container, for schedulers that run images. Behind a profile so that `docker compose up` (what
+  # `make db` runs) never builds or starts it; naming it on the command line enables the profile:
+  #   docker compose run --rm --build job        (or: make docker-run)
+  #   docker compose run --rm job check          any sec-filings subcommand; the exit code is the job's
+  job:
+    build: .
+    image: sec-filings:local
+    profiles: ["job"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Inside the compose network the database is `db` on 5432, whatever DB_PORT publishes on the host.
+      # Deliberately not ${DATABASE_URL}: compose would read a .env written for the host (localhost:25432),
+      # which no container can reach. Another Postgres:
+      #   docker compose run --rm --no-deps -e DATABASE_URL=postgresql://... job
+      DATABASE_URL: postgresql://sec:sec@db:5432/sec_filings
+      # Passed through only when set in the caller's shell; unset means the job's own defaults.
+      SEC_USER_AGENT:
+      SEC_RATE_LIMIT_PER_SEC:
+    volumes:
+      # The working copies of the inputs over the image's baked defaults, so adding a company needs no rebuild.
+      # Both files exist in the repository; an absent bind source would become an empty directory.
+      - ./companies.csv:/app/companies.csv:ro
+      - ./overrides.toml:/app/overrides.toml:ro
 volumes:
   sec_filings_pgdata:

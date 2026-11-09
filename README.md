@@ -97,6 +97,21 @@ Or schedule the command itself and alert on a non-zero exit code: `cd /path/to/r
 scheduler's `PATH` if it uses the compose database). The morning check that tells a wrong run from a crashed one is
 described in `docs/morning-check.md`.
 
+### Running it in a container
+
+For a scheduler that runs images (a Prefect Docker or Kubernetes work pool, a machine without Python 3.12), the
+`Dockerfile` builds the job as `sec-filings:local` and `docker-compose.yml` has a one-shot `job` service for it:
+
+```bash
+make docker-run                 # build the image and run the job against the compose database; same exit code
+make docker-run CMD=check       # any subcommand: check, summary, verify-labels, "report AAPL 2009 FY"
+docker compose run --rm --no-deps -e DATABASE_URL=postgresql://user:pw@host:5432/db job    # another Postgres
+```
+
+The image bakes `companies.csv` and `overrides.toml` as defaults and the service mounts the working copies over them,
+so adding a company needs no rebuild; a code change does, and `make docker-run` always rebuilds. `make run` on the
+host remains the one command; the container runs the same job with the same exit code.
+
 ## Tests
 
 ```bash

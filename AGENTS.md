@@ -24,7 +24,8 @@ make verify-labels                             # loads the SEC's XBRL labels; ex
 ```
 
 `make help` lists every target; each is a thin wrapper over `.venv/bin/sec-filings`. Dependencies are pinned in
-`constraints.txt`: change them with `make lock` (never by hand), then run section 7. With no `DATABASE_URL` in the
+`constraints.txt`: change them with `make lock` (never by hand), then run section 7. `make docker-run` runs the same
+job in a container, for schedulers that run images (README, *Running it in a container*); nothing in this kit needs it. With no `DATABASE_URL` in the
 environment and no `.env` file, `make` uses the Postgres in `docker-compose.yml` and starts it, on localhost only, port
 25432 (`DB_PORT=5433 make run` moves it, data included); otherwise the job uses what you set, and `make db` starts the
 compose one by hand. If `.venv` is broken (the repository moved, say), delete it and the next `make` rebuilds it. If
@@ -171,4 +172,5 @@ tests/             unit tests, fixtures from real EDGAR pages, a DB replay test
 docs/              decisions, morning-check, what-i-didnt-trust, analyst-question, agent-setup, evidence/, review-evidence/, agent-runs/
 overrides.toml     facts EDGAR does not carry: extra CIKs, fiscal year ends, naming conventions, filing notes and corrections, accepted findings
 constraints.txt    the exact package versions make installs; `make lock` refreshes them
+Dockerfile, .dockerignore   the job as an image for schedulers that run containers (`make docker-run`); the compose `job` service runs it
 ```

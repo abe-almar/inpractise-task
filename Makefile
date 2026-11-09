@@ -16,9 +16,10 @@ endif
 PYTHON ?= $(shell command -v python3.12 || echo python3)
 CLI := .venv/bin/sec-filings
 PERIOD ?= FY
+CMD ?= run
 
 .DEFAULT_GOAL := help
-.PHONY: help run backfill check report summary verify-labels test test-db setup lock db
+.PHONY: help run backfill check report summary verify-labels test test-db setup lock db docker-run
 
 help:  ## List the targets
 	@awk -F':.*## ' '/^[a-z-]+:.*## / {printf "%-16s%s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -65,3 +66,6 @@ lock: setup  ## Resolve the newest versions pyproject.toml allows and pin them i
 
 db:  ## Start the database in docker-compose.yml (run does it when there is no DATABASE_URL and no .env)
 	@docker compose up -d --wait --quiet-pull
+
+docker-run:  ## The same job in a container, for schedulers that run images: make docker-run [CMD=check]
+	@docker compose run --rm --build job $(CMD)
