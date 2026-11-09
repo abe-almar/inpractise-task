@@ -12,14 +12,15 @@ You need `make`, Python 3.12+ and Docker (no Docker if you bring your own Postgr
 make run
 ```
 
-That is the one command, from a fresh clone and every morning after. It starts the local Postgres, installs the job
-into `.venv` (the exact versions in `constraints.txt`; `make lock` refreshes them), fetches the ticker map and the filings of every CIK, validates each page, upserts the filings, labels
-them, refreshes the SEC's own labels for filers with news, runs the morning checks, prints a report and exits 0 only
-when the run and every hard check passed. The first run reads every filer's whole history (about 140 requests, about
-a minute), as does the first run after adding a company, for that company; other runs read one page per CIK (about 22
-requests, a few seconds). Running it twice in a morning changes nothing. Every command's output starts by naming the
-database it uses (`database: localhost:25432/sec_filings`; the JSON commands `report` and `summary` say it on stderr),
-so a green run can never be mistaken for a run against another database.
+That is the one command, from a fresh clone and every morning after. It starts the local Postgres, installs the job into
+`.venv` (the exact versions in `constraints.txt`; `make lock` refreshes them), fetches the ticker map and the filings of
+every CIK, validates each page, upserts the filings, labels them, refreshes the SEC's own labels for filers with news,
+runs the morning checks, prints a report and exits 0 only when the run and every hard check passed. The first run reads
+every filer's whole history (about 140 requests, about a minute), as does the first run after adding a company, for that
+company; other runs read one page per CIK (about 22 requests, a few seconds). Running it twice in a morning changes
+nothing. Every command's output starts by naming the database it uses (`database: localhost:25432/sec_filings`; the JSON
+commands `report` and `summary` say it on stderr), so a green run can never be mistaken for a run against another
+database.
 
 The job reads its connection from `DATABASE_URL`, in the environment or in a `.env` file. With neither, `make` supplies
 the database in `docker-compose.yml`, and that is the only case in which it starts Docker (`make db` starts it by hand).

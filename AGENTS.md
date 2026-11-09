@@ -24,13 +24,13 @@ make verify-labels                             # loads the SEC's XBRL labels; ex
 ```
 
 `make help` lists every target; each is a thin wrapper over `.venv/bin/sec-filings`. Dependencies are pinned in
-`constraints.txt`: change them with `make lock` (never by hand), then run section 7. `make docker-run` runs the same
-job in a container, for schedulers that run images (README, *Running it in a container*); nothing in this kit needs it. With no `DATABASE_URL` in the
-environment and no `.env` file, `make` uses the Postgres in `docker-compose.yml` and starts it, on localhost only, port
-25432 (`DB_PORT=5433 make run` moves it, data included); otherwise the job uses what you set, and `make db` starts the
-compose one by hand. If `.venv` is broken (the repository moved, say), delete it and the next `make` rebuilds it. If
-`run` ends with `RESULT: ATTENTION NEEDED`, read the `[FAIL]` lines; section 5 says what each means.
-Counts in this kit (20 companies, 21 CIKs, 22 requests) describe the original list; yours follow `companies.csv`
+`constraints.txt`: change them with `make lock` (never by hand), then run section 7. `make docker-run` runs the same job
+in a container, for schedulers that run images (README, *Running it in a container*); nothing in this kit needs it. With
+no `DATABASE_URL` in the environment and no `.env` file, `make` uses the Postgres in `docker-compose.yml` and starts it,
+on localhost only, port 25432 (`DB_PORT=5433 make run` moves it, data included); otherwise the job uses what you set,
+and `make db` starts the compose one by hand. If `.venv` is broken (the repository moved, say), delete it and the next
+`make` rebuilds it. If `run` ends with `RESULT: ATTENTION NEEDED`, read the `[FAIL]` lines; section 5 says what each
+means. Counts in this kit (20 companies, 21 CIKs, 22 requests) describe the original list; yours follow `companies.csv`
 and the CIKs in `overrides.toml`.
 
 ## 3. Decisions you must not undo without re-reading their entry
